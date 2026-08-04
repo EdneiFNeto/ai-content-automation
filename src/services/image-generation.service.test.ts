@@ -6,6 +6,17 @@ const GENERATED_DIR = path.resolve(__dirname, '../../assets/generated');
 
 const createMock = jest.fn();
 
+// Reflete a classe de erro interna real do SDK (não exportada publicamente),
+// que expõe o status HTTP em `statusCode`, não `status`
+class MockGeminiSdkError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
 jest.mock('@google/genai', () => ({
   GoogleGenAI: jest.fn().mockImplementation(() => ({
     interactions: { create: createMock },
@@ -52,6 +63,27 @@ describe('ImageGenerationService.generateImage', () => {
     await expect(ImageGenerationService.generateImage({ prompt: 'sem imagem' })).rejects.toThrow(
       AppError,
     );
+  });
+
+  it('converte erro do SDK (ex.: quota excedida) em AppError com a mensagem e status reais', async () => {
+    createMock.mockRejectedValueOnce(
+      new MockGeminiSdkError('Quota exceeded for metric: generate_content', 429),
+    );
+
+    await expect(
+      ImageGenerationService.generateImage({ prompt: 'qualquer coisa' }),
+    ).rejects.toMatchObject({
+      statusCode: 429,
+      message: expect.stringContaining('Quota exceeded'),
+    });
+  });
+
+  it('usa status 502 quando o erro do SDK não expõe um status HTTP', async () => {
+    createMock.mockRejectedValueOnce(new Error('falha de rede'));
+
+    await expect(
+      ImageGenerationService.generateImage({ prompt: 'qualquer coisa' }),
+    ).rejects.toMatchObject({ statusCode: 502 });
   });
 
   it('lança AppError quando falta GEMINI_API_KEY', async () => {
