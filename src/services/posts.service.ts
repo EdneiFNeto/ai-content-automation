@@ -17,6 +17,7 @@ class PostsService {
       id: randomUUID(),
       content: input.content,
       imageUrl: input.imageUrl,
+      videoUrl: input.videoUrl,
       status: input.scheduledFor ? 'scheduled' : 'draft',
       scheduledFor: input.scheduledFor,
       createdAt: new Date().toISOString(),

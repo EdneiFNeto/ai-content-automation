@@ -6,13 +6,12 @@ import {
   PublishMediaResponse,
 } from '../types/instagram.types';
 
-interface CreateMediaContainerParams {
-  imageUrl: string;
-  caption?: string;
-}
-
 const CONTAINER_POLL_MAX_ATTEMPTS = 10;
 const CONTAINER_POLL_DELAY_MS = 2000;
+
+// Vídeo/Reel demora bem mais que imagem para o Instagram processar o container
+const REEL_POLL_MAX_ATTEMPTS = 30;
+const REEL_POLL_DELAY_MS = 5000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,18 +45,11 @@ class InstagramService {
     return `https://graph.instagram.com/${version}`;
   }
 
-  private async createMediaContainer({
-    imageUrl,
-    caption,
-  }: CreateMediaContainerParams): Promise<string> {
+  private async createMediaContainer(fields: Record<string, string>): Promise<string> {
     const params = new URLSearchParams({
-      image_url: imageUrl,
+      ...fields,
       access_token: this.accessToken,
     });
-
-    if (caption) {
-      params.set('caption', caption);
-    }
 
     const response = await fetch(`${this.apiBaseUrl}/${this.businessAccountId}/media`, {
       method: 'POST',
@@ -79,13 +71,17 @@ class InstagramService {
 
   // O container leva um tempo para processar a imagem; media_publish antes disso
   // falha com "Media ID is not available", então é preciso aguardar status_code === 'FINISHED'
-  private async waitForContainerReady(creationId: string): Promise<void> {
+  private async waitForContainerReady(
+    creationId: string,
+    maxAttempts: number = CONTAINER_POLL_MAX_ATTEMPTS,
+    delayMs: number = CONTAINER_POLL_DELAY_MS,
+  ): Promise<void> {
     const params = new URLSearchParams({
       fields: 'status_code',
       access_token: this.accessToken,
     });
 
-    for (let attempt = 0; attempt < CONTAINER_POLL_MAX_ATTEMPTS; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const response = await fetch(`${this.apiBaseUrl}/${creationId}?${params.toString()}`);
       const body = (await response.json()) as MediaContainerStatusResponse & GraphApiErrorBody;
 
@@ -107,7 +103,7 @@ class InstagramService {
         );
       }
 
-      await sleep(CONTAINER_POLL_DELAY_MS);
+      await sleep(delayMs);
     }
 
     throw new AppError('Tempo esgotado aguardando o processamento da mídia no Instagram', 504);
@@ -139,8 +135,24 @@ class InstagramService {
 
   // Fluxo em duas etapas da Instagram Graph API: cria o container e depois publica
   public async publishImagePost(imageUrl: string, caption?: string): Promise<string> {
-    const creationId = await this.createMediaContainer({ imageUrl, caption });
+    const creationId = await this.createMediaContainer({
+      image_url: imageUrl,
+      ...(caption ? { caption } : {}),
+    });
     await this.waitForContainerReady(creationId);
+    return this.publishMediaContainer(creationId);
+  }
+
+  // media_type=REELS é o único caminho de vídeo suportado hoje pela Graph API
+  // (vídeo de feed "clássico" foi unificado em Reels) — mesmo fluxo de container,
+  // mas com polling mais longo pois o processamento de vídeo demora mais
+  public async publishReel(videoUrl: string, caption?: string): Promise<string> {
+    const creationId = await this.createMediaContainer({
+      media_type: 'REELS',
+      video_url: videoUrl,
+      ...(caption ? { caption } : {}),
+    });
+    await this.waitForContainerReady(creationId, REEL_POLL_MAX_ATTEMPTS, REEL_POLL_DELAY_MS);
     return this.publishMediaContainer(creationId);
   }
 }

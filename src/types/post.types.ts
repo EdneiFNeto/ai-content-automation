@@ -4,6 +4,7 @@ export interface Post {
   id: string;
   content: string;
   imageUrl?: string;
+  videoUrl?: string;
   status: PostStatus;
   scheduledFor?: string;
   createdAt: string;
@@ -13,6 +14,7 @@ export interface Post {
 export interface CreatePostInput {
   content: string;
   imageUrl?: string;
+  videoUrl?: string;
   scheduledFor?: string;
 }
 
