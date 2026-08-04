@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import ImageGenerationService from '../services/image-generation.service';
+import LocalImagesService from '../services/local-images.service';
 import { sendSuccess } from '../utils/api-response';
+import { buildAssetUrl } from '../utils/public-url';
 import { AppError } from '../errors/app-error';
 import { ImageAspectRatio } from '../types/image-generation.types';
 
@@ -17,8 +19,25 @@ class ImagesController {
       aspectRatio,
     });
 
-    const baseUrl = `${req.protocol}://${req.get('host')}/assets/generated`;
-    sendSuccess(res, { imageUrl: `${baseUrl}/${fileName}`, fileName, mimeType }, 201);
+    sendSuccess(
+      res,
+      { imageUrl: buildAssetUrl(req, `generated/${fileName}`), fileName, mimeType },
+      201,
+    );
+  }
+
+  public async listLocal(req: Request, res: Response): Promise<void> {
+    const images = await LocalImagesService.list();
+
+    const data = images.map((image) => ({
+      ...image,
+      imageUrl: buildAssetUrl(
+        req,
+        image.source === 'generated' ? `generated/${image.fileName}` : image.fileName,
+      ),
+    }));
+
+    sendSuccess(res, data);
   }
 }
 

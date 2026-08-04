@@ -1,8 +1,27 @@
 import { Request, Response } from 'express';
 import PostsService from '../services/posts.service';
 import InstagramService from '../services/instagram.service';
+import LocalImagesService from '../services/local-images.service';
 import { sendSuccess } from '../utils/api-response';
+import { buildAssetUrl } from '../utils/public-url';
 import { AppError } from '../errors/app-error';
+
+// Referencia um arquivo já existente em assets/ ou assets/generated/ pelo nome,
+// sem precisar montar a URL pública na mão a cada post. Função solta (não método de
+// classe) porque os métodos do controller são passados por referência ao Express
+// (asyncHandler(PostsController.create)) e perderiam o "this" se dependessem dele.
+async function resolveLocalImageUrl(req: Request, imageFileName: string): Promise<string> {
+  const match = await LocalImagesService.resolve(imageFileName);
+
+  if (!match) {
+    throw new AppError(`Imagem local "${imageFileName}" não encontrada`, 400);
+  }
+
+  return buildAssetUrl(
+    req,
+    match.source === 'generated' ? `generated/${match.fileName}` : match.fileName,
+  );
+}
 
 class PostsController {
   public async list(req: Request, res: Response): Promise<void> {
@@ -20,13 +39,21 @@ class PostsController {
   }
 
   public async create(req: Request, res: Response): Promise<void> {
-    const { content, imageUrl, scheduledFor } = req.body;
+    const { content, imageUrl, imageFileName, scheduledFor } = req.body;
 
     if (!content) {
       throw new AppError('O campo "content" é obrigatório', 400);
     }
 
-    const post = PostsService.create({ content, imageUrl, scheduledFor });
+    if (imageUrl && imageFileName) {
+      throw new AppError('Envie apenas um: "imageUrl" ou "imageFileName"', 400);
+    }
+
+    const resolvedImageUrl = imageFileName
+      ? await resolveLocalImageUrl(req, imageFileName)
+      : imageUrl;
+
+    const post = PostsService.create({ content, imageUrl: resolvedImageUrl, scheduledFor });
     sendSuccess(res, post, 201);
   }
 

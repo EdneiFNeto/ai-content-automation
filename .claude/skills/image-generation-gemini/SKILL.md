@@ -5,6 +5,8 @@ description: Use ao mexer em geração de imagem via Gemini (Nano Banana), no en
 
 # Geração de imagem com Gemini (Nano Banana)
 
+> **Status: opcional, não é o caminho padrão hoje.** O projeto usa imagens da biblioteca local (`assets/`) por padrão para evitar custo por imagem — ver [[instagram-publishing]] (seção "Criar o post a partir de uma imagem local"). Esta integração continua no código, testada e funcional, para quando fizer sentido usar de novo. Não remover por estar "sem uso no momento".
+
 Integração via SDK oficial `@google/genai`, endpoint `interactions.create` com `response_format: { type: 'image' }`. Implementado em `src/services/image-generation.service.ts`.
 
 ## Modelos ("Nano Banana" é o apelido)

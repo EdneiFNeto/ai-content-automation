@@ -56,7 +56,38 @@ Backend em Node.js + TypeScript (Express) para automação de posts no Instagram
 | `npm run format`        | formata o código com Prettier                    |
 | `npm run format:check`  | só verifica a formatação, sem alterar arquivos    |
 
+## Como postar uma imagem já existente (biblioteca local)
+
+Sem precisar gerar nada por IA: qualquer imagem em `assets/` (ou já gerada antes em `assets/generated/`) pode virar post direto pelo nome do arquivo.
+
+Primeiro, veja quais imagens estão disponíveis:
+
+```bash
+curl http://localhost:3000/images/local
+```
+
+```json
+{
+  "success": true,
+  "data": [
+    { "fileName": "profile.png", "source": "library", "imageUrl": "http://localhost:3000/assets/profile.png" }
+  ]
+}
+```
+
+Depois, crie o post passando `imageFileName` em vez de `imageUrl` — o servidor resolve a URL pública sozinho:
+
+```bash
+curl -X POST http://localhost:3000/posts \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Legenda aqui", "imageFileName": "profile.png" }'
+```
+
+Não envie `imageUrl` e `imageFileName` juntos — é um ou outro. Vale a mesma restrição de URL pública explicada [abaixo](#-a-imagem-precisa-ser-pública): o Instagram só publica se a imagem for alcançável pela internet, então em dev ainda é preciso expor o servidor (ngrok) mesmo usando `imageFileName`.
+
 ## Como gerar uma imagem com IA (Gemini / Nano Banana)
+
+> Opcional — hoje o fluxo padrão é usar imagens locais (seção acima). A integração com Gemini continua no código para quando fizer sentido usar de novo, mas gera custo por imagem (ver tabela de preços nos comentários do serviço/skill), então não é o caminho default.
 
 Se você não tem uma foto pronta, dá pra gerar uma a partir de um prompt de texto:
 
@@ -100,6 +131,8 @@ curl -X POST http://localhost:3000/posts \
     "imageUrl": "https://sua-url-publica.com/foto.jpg"
   }'
 ```
+
+(ou use `imageFileName` em vez de `imageUrl` para referenciar uma imagem local — ver seção acima)
 
 Resposta:
 
@@ -162,8 +195,9 @@ Em produção, use a URL pública real do servidor (ou um storage externo, como 
 | ------ | ---------------------- | ---------------------------------------- |
 | GET    | `/posts`               | lista todos os posts                     |
 | GET    | `/posts/:id`           | detalhes de um post                      |
-| POST   | `/posts`               | cria um post (rascunho)                  |
+| POST   | `/posts`               | cria um post (rascunho) — `imageUrl` ou `imageFileName` |
 | POST   | `/posts/:id/publish`   | publica um post existente no Instagram   |
+| GET    | `/images/local`        | lista imagens disponíveis em `assets/` e `assets/generated/` |
 | POST   | `/images/generate`     | gera uma imagem a partir de um prompt (Gemini) |
 
 ## Estrutura do projeto

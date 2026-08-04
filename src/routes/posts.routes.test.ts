@@ -26,6 +26,35 @@ describe('POST /posts', () => {
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
+
+  it('cria um post referenciando uma imagem local por "imageFileName"', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({ content: 'Post com imagem local', imageFileName: 'profile.png' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.imageUrl).toMatch(/\/assets\/profile\.png$/);
+  });
+
+  it('retorna 400 quando "imageFileName" não existe', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({ content: 'Post com imagem inexistente', imageFileName: 'nao-existe.png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('retorna 400 quando "imageUrl" e "imageFileName" são enviados juntos', async () => {
+    const res = await request(app).post('/posts').send({
+      content: 'Post ambíguo',
+      imageUrl: 'https://example.com/foto.jpg',
+      imageFileName: 'profile.png',
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
 });
 
 describe('GET /posts/:id', () => {

@@ -37,3 +37,19 @@ describe('POST /images/generate', () => {
     expect(generateImageMock).not.toHaveBeenCalled();
   });
 });
+
+describe('GET /images/local', () => {
+  it('lista as imagens disponíveis em assets/ com URL pública', async () => {
+    const res = await request(app).get('/images/local');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toContainEqual(
+      expect.objectContaining({
+        fileName: 'profile.png',
+        source: 'library',
+        imageUrl: expect.stringMatching(/\/assets\/profile\.png$/),
+      }),
+    );
+  });
+});

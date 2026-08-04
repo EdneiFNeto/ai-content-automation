@@ -33,14 +33,25 @@ A Graph API busca a imagem a partir do `image_url` enviado — **o servidor da M
 - IPs de rede local
 - URLs atrás de autenticação
 
-Para publicar de verdade, `imageUrl` do post precisa apontar para um host público (HTTPS), seja o próprio servidor exposto publicamente (deploy, túnel como ngrok em dev) servindo `/assets`, seja um storage externo (S3, Cloudinary, etc.).
+Para publicar de verdade, `imageUrl` do post precisa apontar para um host público (HTTPS), seja o próprio servidor exposto publicamente (deploy, túnel como ngrok em dev) servindo `/assets`, seja um storage externo (S3, Cloudinary, etc.). Essa restrição vale mesmo usando `imageFileName` (ver abaixo) — só muda quem monta a URL, não a exigência de ela ser pública.
+
+## Criar o post a partir de uma imagem local (`imageFileName`)
+
+`POST /posts` aceita `imageFileName` como alternativa a `imageUrl` — referencia um arquivo já existente em `assets/` (biblioteca) ou `assets/generated/` (gerado pelo Gemini) pelo nome, sem precisar montar a URL pública na mão. Implementado em `LocalImagesService.resolve()` (`src/services/local-images.service.ts`) + `resolveLocalImageUrl()` em `posts.controller.ts`.
+
+- Nunca envie `imageUrl` e `imageFileName` juntos — o controller responde `400`.
+- `imageFileName` inexistente (em nenhuma das duas pastas) → `400`.
+- `LocalImagesService.resolve()` usa `path.basename()` no nome recebido antes de checar o disco — protege contra path traversal (`../../etc/passwd` vira só `passwd`, que não existe nas pastas conhecidas).
+- `GET /images/local` lista o que está disponível (`fileName`, `source`, `imageUrl` já pronta) — útil para descobrir nomes de arquivo sem precisar de acesso ao disco do servidor.
+
+Hoje esse é o caminho padrão do projeto (evita o custo do Gemini) — ver [[image-generation-gemini]] para quando fizer sentido voltar a gerar imagem por IA em vez de usar a biblioteca local.
 
 ## Fluxo de publicação de um post
 
 `POST /posts/:id/publish` (`src/controllers/posts.controller.ts#publish`):
 
 1. Busca o post por `id` — 404 se não existir.
-2. Exige `post.imageUrl` — 400 se ausente (Instagram não publica só texto via este fluxo).
+2. Exige `post.imageUrl` — 400 se ausente (Instagram não publica só texto via este fluxo). Note que isso já é o `imageUrl` resolvido — não importa se o post foi criado com `imageUrl` direto ou com `imageFileName`.
 3. Chama `InstagramService.publishImagePost(imageUrl, content)`.
 4. Sucesso: atualiza o post para `status: 'published'` e grava `instagramMediaId`.
 5. Falha: atualiza o post para `status: 'failed'` e relança o erro (o middleware central formata a resposta — ver [[api-response-conventions]]).
