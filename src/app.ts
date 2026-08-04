@@ -3,6 +3,7 @@ import path from 'path';
 import userRoutes from './routes/user.routes';
 import assetRoutes from './routes/asset.routes';
 import postsRoutes from './routes/posts.routes';
+import imagesRoutes from './routes/images.routes';
 import { errorHandler } from './middlewares/error-handler.middleware';
 
 const app = express();
@@ -17,6 +18,7 @@ app.use('/assets', express.static(path.resolve(__dirname, '../assets')));
 app.use('/users', userRoutes);
 app.use('/assets', assetRoutes);
 app.use('/posts', postsRoutes);
+app.use('/images', imagesRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Servidor TypeScript configurado com sucesso!' });

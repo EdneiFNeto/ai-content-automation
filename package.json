@@ -22,6 +22,7 @@
     "node": ">=21.0.0"
   },
   "dependencies": {
+    "@google/genai": "^2.15.0",
     "dotenv": "^17.4.2",
     "express": "^4.22.1"
   },

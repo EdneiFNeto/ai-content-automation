@@ -1,12 +1,13 @@
 # influencer
 
-Backend em Node.js + TypeScript (Express) para automação de posts no Instagram via Meta Graph API.
+Backend em Node.js + TypeScript (Express) para automação de posts no Instagram via Meta Graph API, com geração de imagem por IA via Gemini (Nano Banana).
 
 ## Pré-requisitos
 
 - Node.js >= 21 (o projeto usa `fetch` nativo do Node)
 - Uma conta Instagram **Business** ou **Creator**
 - Um token de acesso da **Instagram API (Instagram Login)** — token que começa com `IGAA...` — com permissão `instagram_content_publish`
+- Uma **API key do Gemini** (opcional, só se for usar geração de imagem) — gerada em https://aistudio.google.com/apikey
 
 ## Configuração
 
@@ -27,6 +28,8 @@ Backend em Node.js + TypeScript (Express) para automação de posts no Instagram
    INSTAGRAM_BUSINESS_ACCOUNT_ID=   # ig-user-id numérico da conta (confirmável via GET /me)
    INSTAGRAM_ACCESS_TOKEN=          # token "IGAA..." com permissão instagram_content_publish
    GRAPH_API_VERSION=v21.0
+   GEMINI_API_KEY=                  # opcional — só necessário para gerar imagens
+   GEMINI_IMAGE_MODEL=gemini-3.1-flash-image
    ```
 
    O `.env` nunca é versionado (está no `.gitignore`) — não cole o token em nenhum outro lugar do código.
@@ -52,6 +55,36 @@ Backend em Node.js + TypeScript (Express) para automação de posts no Instagram
 | `npm run lint:fix`      | corrige o que for autofixável                    |
 | `npm run format`        | formata o código com Prettier                    |
 | `npm run format:check`  | só verifica a formatação, sem alterar arquivos    |
+
+## Como gerar uma imagem com IA (Gemini / Nano Banana)
+
+Se você não tem uma foto pronta, dá pra gerar uma a partir de um prompt de texto:
+
+```bash
+curl -X POST http://localhost:3000/images/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "retrato profissional em estúdio, luz suave, fundo neutro",
+    "aspectRatio": "4:5"
+  }'
+```
+
+`aspectRatio` é opcional (aceita `1:1`, `3:2`, `2:3`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`).
+
+Resposta:
+
+```json
+{
+  "success": true,
+  "data": {
+    "imageUrl": "http://localhost:3000/assets/generated/<uuid>.png",
+    "fileName": "<uuid>.png",
+    "mimeType": "image/png"
+  }
+}
+```
+
+A imagem fica salva em `assets/generated/` (não versionada) e servida em `/assets/generated/<arquivo>`. Use o `imageUrl` retornado direto como `imageUrl` na criação do post (passo seguinte) — vale a mesma restrição de URL pública explicada abaixo.
 
 ## Como fazer um post no Instagram
 
@@ -123,14 +156,15 @@ https://algo.ngrok-free.dev/assets/profile.png
 
 Em produção, use a URL pública real do servidor (ou um storage externo, como S3/Cloudinary).
 
-### Outros endpoints de posts
+### Outros endpoints
 
-| Método | Rota                | Descrição                          |
-| ------ | -------------------- | ------------------------------------ |
-| GET    | `/posts`             | lista todos os posts                 |
-| GET    | `/posts/:id`         | detalhes de um post                  |
-| POST   | `/posts`             | cria um post (rascunho)              |
-| POST   | `/posts/:id/publish` | publica um post existente no Instagram |
+| Método | Rota                  | Descrição                              |
+| ------ | ---------------------- | ---------------------------------------- |
+| GET    | `/posts`               | lista todos os posts                     |
+| GET    | `/posts/:id`           | detalhes de um post                      |
+| POST   | `/posts`               | cria um post (rascunho)                  |
+| POST   | `/posts/:id/publish`   | publica um post existente no Instagram   |
+| POST   | `/images/generate`     | gera uma imagem a partir de um prompt (Gemini) |
 
 ## Estrutura do projeto
 
@@ -140,7 +174,7 @@ src/
   index.ts                # bootstrap do servidor (carrega .env e faz app.listen)
   controllers/             # lógica de cada recurso
   routes/                  # endpoints HTTP
-  services/                # integrações externas (ex.: Instagram Graph API)
+  services/                # integrações externas (Instagram Graph API, Gemini)
   middlewares/              # middleware central de tratamento de erro
   errors/                  # classe AppError
   utils/                    # helpers (resposta padrão, wrapper async)
