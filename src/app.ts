@@ -8,6 +8,11 @@ import { errorHandler } from './middlewares/error-handler.middleware';
 
 const app = express();
 
+// Respeita X-Forwarded-Proto/Host de proxies (ngrok, load balancer) — sem isso,
+// req.protocol sempre reporta "http" mesmo atrás de um túnel HTTPS, o que gera
+// imageUrl errada para a Instagram Graph API (que exige HTTPS)
+app.set('trust proxy', true);
+
 app.use(express.json());
 
 // Servir arquivos estáticos da pasta assets diretamente
