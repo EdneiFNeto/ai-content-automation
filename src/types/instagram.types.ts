@@ -19,3 +19,8 @@ export type MediaContainerStatus = 'EXPIRED' | 'ERROR' | 'FINISHED' | 'IN_PROGRE
 export interface MediaContainerStatusResponse {
   status_code?: MediaContainerStatus;
 }
+
+export interface CarouselItem {
+  type: 'IMAGE' | 'VIDEO';
+  url: string;
+}

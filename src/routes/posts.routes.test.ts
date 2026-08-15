@@ -2,13 +2,14 @@ import request from 'supertest';
 
 jest.mock('../services/instagram.service', () => ({
   __esModule: true,
-  default: { publishImagePost: jest.fn() },
+  default: { publishImagePost: jest.fn(), publishCarouselPost: jest.fn() },
 }));
 
 import app from '../app';
 import InstagramService from '../services/instagram.service';
 
 const publishImagePostMock = InstagramService.publishImagePost as jest.Mock;
+const publishCarouselPostMock = InstagramService.publishCarouselPost as jest.Mock;
 
 describe('POST /posts', () => {
   it('cria um post com sucesso', async () => {
@@ -55,6 +56,67 @@ describe('POST /posts', () => {
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
+
+  it('cria um post com carouselItems (imageUrl e videoFileName)', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Post em carrossel',
+        carouselItems: [
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'VIDEO', videoFileName: 'video-01.mp4' },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.carouselItems).toEqual([
+      { type: 'IMAGE', url: 'https://example.com/foto.jpg' },
+      { type: 'VIDEO', url: expect.stringMatching(/\/assets\/video-01\.mp4$/) },
+    ]);
+  });
+
+  it('retorna 400 quando "carouselItems" tem menos de 2 itens', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Carrossel curto demais',
+        carouselItems: [{ type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('retorna 400 quando um item de "carouselItems" não tem "type" válido', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Carrossel com item inválido',
+        carouselItems: [
+          { imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto2.jpg' },
+        ],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('retorna 400 quando "carouselItems" é enviado junto com "imageUrl"', async () => {
+    const res = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Post ambíguo',
+        imageUrl: 'https://example.com/foto.jpg',
+        carouselItems: [
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto2.jpg' },
+        ],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
 });
 
 describe('GET /posts/:id', () => {
@@ -78,6 +140,35 @@ describe('GET /posts/:id', () => {
 describe('POST /posts/:id/publish', () => {
   afterEach(() => {
     publishImagePostMock.mockReset();
+    publishCarouselPostMock.mockReset();
+  });
+
+  it('publica carrossel no Instagram e marca o post como "published"', async () => {
+    publishCarouselPostMock.mockResolvedValueOnce('media-carousel-1');
+
+    const created = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Post em carrossel',
+        carouselItems: [
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto2.jpg' },
+        ],
+      });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('published');
+    expect(res.body.data.instagramMediaId).toBe('media-carousel-1');
+    expect(publishCarouselPostMock).toHaveBeenCalledWith(
+      [
+        { type: 'IMAGE', url: 'https://example.com/foto.jpg' },
+        { type: 'IMAGE', url: 'https://example.com/foto2.jpg' },
+      ],
+      'Post em carrossel',
+    );
+    expect(publishImagePostMock).not.toHaveBeenCalled();
   });
 
   it('publica no Instagram e marca o post como "published"', async () => {

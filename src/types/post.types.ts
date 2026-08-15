@@ -1,3 +1,7 @@
+import { CarouselItem } from './instagram.types';
+
+export type { CarouselItem };
+
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
 
 export interface Post {
@@ -5,6 +9,7 @@ export interface Post {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  carouselItems?: CarouselItem[];
   status: PostStatus;
   scheduledFor?: string;
   createdAt: string;
@@ -15,6 +20,7 @@ export interface CreatePostInput {
   content: string;
   imageUrl?: string;
   videoUrl?: string;
+  carouselItems?: CarouselItem[];
   scheduledFor?: string;
 }
 

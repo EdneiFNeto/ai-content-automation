@@ -1,5 +1,6 @@
 import { AppError } from '../errors/app-error';
 import {
+  CarouselItem,
   CreateMediaContainerResponse,
   GraphApiErrorBody,
   MediaContainerStatusResponse,
@@ -153,6 +154,47 @@ class InstagramService {
       ...(caption ? { caption } : {}),
     });
     await this.waitForContainerReady(creationId, REEL_POLL_MAX_ATTEMPTS, REEL_POLL_DELAY_MS);
+    return this.publishMediaContainer(creationId);
+  }
+
+  // Item de carrossel vira seu próprio container (is_carousel_item=true), sem
+  // media_type para imagem e media_type=VIDEO (não REELS) para vídeo — depois
+  // ele só é referenciado como filho, nunca publicado sozinho
+  private async createCarouselItemContainer(item: CarouselItem): Promise<string> {
+    const creationId = await this.createMediaContainer({
+      is_carousel_item: 'true',
+      ...(item.type === 'VIDEO'
+        ? { media_type: 'VIDEO', video_url: item.url }
+        : { image_url: item.url }),
+    });
+
+    await this.waitForContainerReady(
+      creationId,
+      item.type === 'VIDEO' ? REEL_POLL_MAX_ATTEMPTS : CONTAINER_POLL_MAX_ATTEMPTS,
+      item.type === 'VIDEO' ? REEL_POLL_DELAY_MS : CONTAINER_POLL_DELAY_MS,
+    );
+
+    return creationId;
+  }
+
+  // Carrossel é um terceiro tipo de container: cada item processa e fica pronto
+  // por conta própria, depois um container "pai" media_type=CAROUSEL os agrupa
+  // via children (lista de creation_id) antes de seguir pro media_publish normal
+  public async publishCarouselPost(items: CarouselItem[], caption?: string): Promise<string> {
+    if (items.length < 2 || items.length > 10) {
+      throw new AppError('Carrossel precisa ter entre 2 e 10 itens', 400);
+    }
+
+    const childrenIds = await Promise.all(
+      items.map((item) => this.createCarouselItemContainer(item)),
+    );
+
+    const creationId = await this.createMediaContainer({
+      media_type: 'CAROUSEL',
+      children: childrenIds.join(','),
+      ...(caption ? { caption } : {}),
+    });
+    await this.waitForContainerReady(creationId);
     return this.publishMediaContainer(creationId);
   }
 }

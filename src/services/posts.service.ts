@@ -18,6 +18,7 @@ class PostsService {
       content: input.content,
       imageUrl: input.imageUrl,
       videoUrl: input.videoUrl,
+      carouselItems: input.carouselItems,
       status: input.scheduledFor ? 'scheduled' : 'draft',
       scheduledFor: input.scheduledFor,
       createdAt: new Date().toISOString(),

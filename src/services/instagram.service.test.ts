@@ -96,3 +96,69 @@ describe('InstagramService.publishImagePost', () => {
     );
   });
 });
+
+describe('InstagramService.publishCarouselPost', () => {
+  it('cria um container por item, agrupa em CAROUSEL e publica', async () => {
+    // Os dois itens são criados via Promise.all, então as chamadas de fetch ficam
+    // intercaladas por etapa (cria item1, cria item2, poll item1, poll item2), não
+    // sequenciais por item — a ordem dos mocks abaixo segue essa intercalação real.
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'item-1' }) } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'item-2' }) } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status_code: 'FINISHED' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status_code: 'FINISHED' }),
+      } as Response)
+      // container pai CAROUSEL: cria + poll pronto + publica
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'carousel-1' }) } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status_code: 'FINISHED' }),
+      } as Response)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'media-1' }) } as Response);
+
+    const mediaId = await InstagramService.publishCarouselPost(
+      [
+        { type: 'IMAGE', url: 'https://example.com/foto.jpg' },
+        { type: 'VIDEO', url: 'https://example.com/video.mp4' },
+      ],
+      'legenda',
+    );
+
+    expect(mediaId).toBe('media-1');
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+
+    const createItem1Body = fetchMock.mock.calls[0][1]?.body as string;
+    expect(createItem1Body).toContain('is_carousel_item=true');
+    expect(createItem1Body).toContain('image_url=');
+
+    const createItem2Body = fetchMock.mock.calls[1][1]?.body as string;
+    expect(createItem2Body).toContain('is_carousel_item=true');
+    expect(createItem2Body).toContain('media_type=VIDEO');
+    expect(createItem2Body).toContain('video_url=');
+
+    const createParentBody = fetchMock.mock.calls[4][1]?.body as string;
+    expect(createParentBody).toContain('media_type=CAROUSEL');
+    expect(createParentBody).toContain('children=item-1%2Citem-2');
+  });
+
+  it('lança AppError quando menos de 2 itens são enviados', async () => {
+    await expect(
+      InstagramService.publishCarouselPost([{ type: 'IMAGE', url: 'https://example.com/foto.jpg' }]),
+    ).rejects.toThrow(/entre 2 e 10 itens/);
+  });
+
+  it('lança AppError quando mais de 10 itens são enviados', async () => {
+    const items = Array.from({ length: 11 }, (_, i) => ({
+      type: 'IMAGE' as const,
+      url: `https://example.com/foto-${i}.jpg`,
+    }));
+
+    await expect(InstagramService.publishCarouselPost(items)).rejects.toThrow(/entre 2 e 10 itens/);
+  });
+});
