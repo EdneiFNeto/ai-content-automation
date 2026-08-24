@@ -1,6 +1,9 @@
-# influencer
+# Ai-content-automation
 
 Backend em Node.js + TypeScript (Express) para automação de posts no Instagram via Meta Graph API, com geração de imagem por IA via Gemini (Nano Banana).
+
+[Instagram](https://www.instagram.com/drabeatriznogueira.ai) plataforma de automação de conteúdo baseada em IA para gerar, otimizar e publicar automaticamente conteúdos em contas de redes sociais, com foco no Instagram.
+
 
 ## Pré-requisitos
 
