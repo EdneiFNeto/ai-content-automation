@@ -1,8 +1,13 @@
 # Ai-content-automation
 
-Backend em Node.js + TypeScript (Express) para automação de posts no Instagram via Meta Graph API, com geração de imagem por IA via Gemini (Nano Banana).
+Backend em Node.js + TypeScript (Express) para automação de posts no Instagram (Meta Graph API) e TikTok (Content Posting API), com geração de imagem por IA via Gemini (Nano Banana).
 
 [Instagram](https://www.instagram.com/drabeatriznogueira.ai) & [Tiktok](https://www.tiktok.com/@bianutricionistaai) plataforma de automação de conteúdo baseada em IA para gerar, otimizar e publicar automaticamente conteúdos em contas de redes sociais, com foco no Instagram.
+
+**Não é de um projeto só.** A conta de destino é o que estiver no `.env`
+(`INSTAGRAM_*` / `TIKTOK_*`); vários projetos — inclusive fora do nicho de
+conteúdo IA, como o jogo *Ironcrag Conquest* — mandam a mídia + legenda por HTTP
+e este serviço publica. Ver [Publicando de vários projetos](#publicando-de-vários-projetos).
 
 
 ## Pré-requisitos
@@ -198,10 +203,44 @@ Em produção, use a URL pública real do servidor (ou um storage externo, como 
 | ------ | ---------------------- | ---------------------------------------- |
 | GET    | `/posts`               | lista todos os posts                     |
 | GET    | `/posts/:id`           | detalhes de um post                      |
-| POST   | `/posts`               | cria um post (rascunho) — `imageUrl` ou `imageFileName` |
-| POST   | `/posts/:id/publish`   | publica um post existente no Instagram   |
+| POST   | `/posts`               | cria um post (rascunho) — `imageUrl`/`imageFileName`/`videoUrl`/`videoFileName`/`carouselItems`, `project` opcional |
+| POST   | `/posts/:id/publish`   | publica no Instagram e, em seguida, no TikTok |
 | GET    | `/images/local`        | lista imagens disponíveis em `assets/` e `assets/generated/` |
 | POST   | `/images/generate`     | gera uma imagem a partir de um prompt (Gemini) |
+| POST   | `/assets`              | sobe uma imagem/vídeo (corpo cru) → `{ fileName, url }` |
+
+## Publicando de vários projetos
+
+Qualquer projeto publica sem compartilhar sistema de arquivos com este repo —
+só HTTP:
+
+1. **Sobe a mídia** — `POST /assets` com os bytes no corpo, `Content-Type` do
+   arquivo, nome opcional em `?name=`:
+   ```bash
+   curl -X POST "http://localhost:3000/assets?name=01-home.png" \
+     -H "Content-Type: image/png" --data-binary @01-home.png
+   # → { "success": true, "data": { "fileName": "01-home.png",
+   #     "url": "http://localhost:3000/assets/generated/01-home.png" } }
+   ```
+   Aceita `image/png|jpeg|webp` e `video/mp4|quicktime`, até 64 MB. Salva em
+   `assets/generated/` (mesma pasta do Gemini). A URL devolvida já respeita
+   proxy/ngrok (`trust proxy`).
+
+2. **Cria o post** com as URLs devolvidas + `project` pra atribuição:
+   ```bash
+   curl -X POST http://localhost:3000/posts -H "Content-Type: application/json" -d '{
+     "content": "Legenda…", "project": "ironcrag-conquest",
+     "carouselItems": [
+       { "type": "IMAGE", "imageUrl": "https://…/assets/generated/01-home.png" },
+       { "type": "IMAGE", "imageUrl": "https://…/assets/generated/02-choose.png" }
+     ]
+   }'
+   ```
+
+3. **Publica** — `POST /posts/:id/publish`.
+
+`project` é texto livre, só pra rastrear a origem — não muda o comportamento.
+O `tool/promo/` do repo `ironcrag_conquest` já faz esse fluxo ponta a ponta.
 
 ## Estrutura do projeto
 

@@ -149,6 +149,7 @@ class PostsController {
   public async create(req: Request, res: Response): Promise<void> {
     const {
       content,
+      project,
       imageUrl,
       imageFileName,
       videoUrl,
@@ -200,6 +201,7 @@ class PostsController {
 
     const post = PostsService.create({
       content,
+      project,
       imageUrl: resolvedImageUrl,
       videoUrl: resolvedVideoUrl,
       carouselItems: resolvedCarouselItems,

@@ -35,6 +35,18 @@ A Graph API busca a imagem a partir do `image_url` enviado — **o servidor da M
 
 Para publicar de verdade, `imageUrl` do post precisa apontar para um host público (HTTPS), seja o próprio servidor exposto publicamente (deploy, túnel como ngrok em dev) servindo `/assets`, seja um storage externo (S3, Cloudinary, etc.). Essa restrição vale mesmo usando `imageFileName` (ver abaixo) — só muda quem monta a URL, não a exigência de ela ser pública.
 
+## Receber mídia de outro projeto (`POST /assets`)
+
+`POST /assets` recebe os bytes de uma imagem/vídeo no corpo cru (`Content-Type`
+do arquivo, nome opcional em `?name=`), salva em `assets/generated/` via
+`AssetUploadService`, e devolve `{ fileName, url }` — a `url` já sai pública
+(usa `buildAssetUrl` / `trust proxy`). É por aí que outros repos de jogo mandam
+o conteúdo sem compartilhar disco: `POST /assets` (uma vez por arquivo) →
+`POST /posts` com as `imageUrl`/`videoUrl` devolvidas + `project` →
+`POST /posts/:id/publish`. `project` é texto livre no post (só atribuição, não
+muda nada). Aceita `image/png|jpeg|webp`, `video/mp4|quicktime`, até 64 MB.
+Rota com `express.raw({ type: () => true })` — a validação de tipo é no service.
+
 ## Criar o post a partir de uma imagem local (`imageFileName`)
 
 `POST /posts` aceita `imageFileName` como alternativa a `imageUrl` — referencia um arquivo já existente em `assets/` (biblioteca) ou `assets/generated/` (gerado pelo Gemini) pelo nome, sem precisar montar a URL pública na mão. Implementado em `LocalImagesService.resolve()` (`src/services/local-images.service.ts`) + `resolveLocalImageUrl()` em `posts.controller.ts`.

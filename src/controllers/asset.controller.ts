@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import AssetUploadService from '../services/asset-upload.service';
+import { buildAssetUrl } from '../utils/public-url';
+import { sendSuccess } from '../utils/api-response';
 
 class AssetController {
   /**
@@ -40,6 +43,19 @@ class AssetController {
     };
 
     res.status(200).json(response);
+  }
+
+  /**
+   * `POST /assets` — recebe os bytes de uma imagem/vídeo no corpo da requisição
+   * (raw, `Content-Type` do arquivo; nome opcional em `?name=`), salva em
+   * `assets/generated/` e devolve `{ fileName, url }` (URL pública já pronta pra
+   * usar como `imageUrl`/`videoUrl` de um post). Serve pra outros projetos
+   * mandarem a mídia sem compartilhar sistema de arquivos.
+   */
+  public async upload(req: Request, res: Response): Promise<void> {
+    const name = typeof req.query.name === 'string' ? req.query.name : undefined;
+    const { fileName } = await AssetUploadService.save(req.body, req.headers['content-type'], name);
+    sendSuccess(res, { fileName, url: buildAssetUrl(req, `generated/${fileName}`) }, 201);
   }
 }
 

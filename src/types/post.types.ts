@@ -12,6 +12,8 @@ export type TikTokPublishOutcome = 'published' | 'skipped' | 'failed';
 export interface Post {
   id: string;
   content: string;
+  /** Projeto de origem (ex.: "ironcrag-conquest"). Livre; só pra atribuição. */
+  project?: string;
   imageUrl?: string;
   videoUrl?: string;
   carouselItems?: CarouselItem[];
@@ -26,6 +28,7 @@ export interface Post {
 
 export interface CreatePostInput {
   content: string;
+  project?: string;
   imageUrl?: string;
   videoUrl?: string;
   carouselItems?: CarouselItem[];

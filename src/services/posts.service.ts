@@ -16,6 +16,7 @@ class PostsService {
     const post: Post = {
       id: randomUUID(),
       content: input.content,
+      project: input.project,
       imageUrl: input.imageUrl,
       videoUrl: input.videoUrl,
       carouselItems: input.carouselItems,
