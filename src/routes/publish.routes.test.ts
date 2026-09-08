@@ -14,6 +14,16 @@ jest.mock('../services/tiktok.service', () => ({
   default: { publishVideo: jest.fn(), publishPhoto: jest.fn() },
 }));
 
+jest.mock('../services/facebook.service', () => ({
+  __esModule: true,
+  default: {
+    isConfigured: false,
+    publishPhoto: jest.fn(),
+    publishPhotos: jest.fn(),
+    publishVideo: jest.fn(),
+  },
+}));
+
 // Upload de bytes não toca no disco no teste.
 jest.mock('../services/asset-upload.service', () => ({
   __esModule: true,
@@ -27,12 +37,16 @@ jest.mock('../services/asset-upload.service', () => ({
 import app from '../app';
 import InstagramService from '../services/instagram.service';
 import TikTokService from '../services/tiktok.service';
+import FacebookService from '../services/facebook.service';
 
 const igImage = InstagramService.publishImagePost as jest.Mock;
 const igCarousel = InstagramService.publishCarouselPost as jest.Mock;
 const igReel = InstagramService.publishReel as jest.Mock;
 const ttVideo = TikTokService.publishVideo as jest.Mock;
 const ttPhoto = TikTokService.publishPhoto as jest.Mock;
+const fbPhoto = FacebookService.publishPhoto as jest.Mock;
+const fbPhotos = FacebookService.publishPhotos as jest.Mock;
+const fbVideo = FacebookService.publishVideo as jest.Mock;
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -40,7 +54,10 @@ const PNG = Buffer.from(
 );
 
 afterEach(() => {
-  [igImage, igCarousel, igReel, ttVideo, ttPhoto].forEach((m) => m.mockReset());
+  [igImage, igCarousel, igReel, ttVideo, ttPhoto, fbPhoto, fbPhotos, fbVideo].forEach((m) =>
+    m.mockReset(),
+  );
+  (FacebookService as unknown as { isConfigured: boolean }).isConfigured = false;
 });
 
 describe('POST /publish — multipart (upload)', () => {
@@ -208,6 +225,66 @@ describe('POST /publish — TikTok e falhas', () => {
     expect(
       list.body.data.some((p: { status: string; error?: string }) => p.status === 'failed'),
     ).toBe(true);
+  });
+});
+
+describe('POST /publish — Facebook', () => {
+  it('sem credenciais → facebookStatus "skipped", sem chamar o service', async () => {
+    igImage.mockResolvedValueOnce('ig-1');
+    ttPhoto.mockResolvedValueOnce('tt-1');
+
+    const res = await request(app)
+      .post('/publish')
+      .send({ caption: 'x', media: ['https://x.test/a.jpg'] });
+
+    expect(res.body.data.facebookStatus).toBe('skipped');
+    expect(fbPhoto).not.toHaveBeenCalled();
+    expect(fbPhotos).not.toHaveBeenCalled();
+  });
+
+  it('configurado: 1 imagem → Facebook publica foto', async () => {
+    (FacebookService as unknown as { isConfigured: boolean }).isConfigured = true;
+    igImage.mockResolvedValueOnce('ig-1');
+    ttPhoto.mockResolvedValueOnce('tt-1');
+    fbPhotos.mockResolvedValueOnce('fb-post-1');
+
+    const res = await request(app)
+      .post('/publish')
+      .send({ caption: 'oi', media: ['https://x.test/a.jpg'] });
+
+    expect(res.body.data.facebookStatus).toBe('published');
+    expect(res.body.data.facebookPostId).toBe('fb-post-1');
+    expect(fbPhotos).toHaveBeenCalledWith(['https://x.test/a.jpg'], 'oi');
+  });
+
+  it('configurado: 1 vídeo → Facebook publica vídeo', async () => {
+    (FacebookService as unknown as { isConfigured: boolean }).isConfigured = true;
+    igReel.mockResolvedValueOnce('ig-reel');
+    ttVideo.mockResolvedValueOnce('tt-v');
+    fbVideo.mockResolvedValueOnce('fb-vid-1');
+
+    const res = await request(app)
+      .post('/publish')
+      .send({ caption: 'reel', media: ['https://x.test/v.mp4'] });
+
+    expect(res.body.data.facebookStatus).toBe('published');
+    expect(fbVideo).toHaveBeenCalledWith('https://x.test/v.mp4', 'reel');
+  });
+
+  it('configurado mas Facebook falha → post segue "published"', async () => {
+    (FacebookService as unknown as { isConfigured: boolean }).isConfigured = true;
+    igImage.mockResolvedValueOnce('ig-1');
+    ttPhoto.mockResolvedValueOnce('tt-1');
+    fbPhotos.mockRejectedValueOnce(new Error('Page token expirado'));
+
+    const res = await request(app)
+      .post('/publish')
+      .send({ caption: 'x', media: ['https://x.test/a.jpg'] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('published');
+    expect(res.body.data.facebookStatus).toBe('failed');
+    expect(res.body.data.facebookError).toBe('Page token expirado');
   });
 });
 

@@ -2,9 +2,10 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { AppError } from '../errors/app-error';
 import { sendSuccess } from '../utils/api-response';
-import { CarouselItem, Post, TikTokPublishOutcome } from '../types/post.types';
+import { CarouselItem, Post, SecondaryPublishOutcome } from '../types/post.types';
 import InstagramService from '../services/instagram.service';
 import TikTokService from '../services/tiktok.service';
+import FacebookService from '../services/facebook.service';
 import PostsService from '../services/posts.service';
 import {
   UploadedFile,
@@ -12,15 +13,15 @@ import {
   resolveUploadedFile,
 } from '../services/media-resolver.service';
 
-interface TikTokResult {
-  status: TikTokPublishOutcome;
+interface SecondaryResult {
+  status: SecondaryPublishOutcome;
   publishId?: string;
   error?: string;
 }
 
 // Publica no TikTok logo depois do Instagram. Nunca lança — uma falha aqui não
 // pode derrubar um post que já foi ao ar no Instagram.
-async function publishToTikTok(items: CarouselItem[], caption: string): Promise<TikTokResult> {
+async function publishToTikTok(items: CarouselItem[], caption: string): Promise<SecondaryResult> {
   try {
     const hasVideo = items.some((i) => i.type === 'VIDEO');
     if (hasVideo) {
@@ -47,6 +48,43 @@ async function publishToTikTok(items: CarouselItem[], caption: string): Promise<
   }
 }
 
+// Publica na Página do Facebook logo depois do Instagram. Mesma regra: nunca
+// lança. `skipped` quando não há credenciais ou o formato não encaixa.
+async function publishToFacebook(items: CarouselItem[], caption: string): Promise<SecondaryResult> {
+  if (!FacebookService.isConfigured) {
+    return {
+      status: 'skipped',
+      error: 'Facebook não configurado (FACEBOOK_PAGE_ID / _ACCESS_TOKEN)',
+    };
+  }
+  try {
+    const videos = items.filter((i) => i.type === 'VIDEO');
+    const images = items.filter((i) => i.type === 'IMAGE');
+
+    if (videos.length === 1 && images.length === 0) {
+      return {
+        status: 'published',
+        publishId: await FacebookService.publishVideo(videos[0].url, caption),
+      };
+    }
+    if (videos.length > 0) {
+      return { status: 'skipped', error: 'Facebook: post misto de vídeo e imagem não suportado' };
+    }
+    return {
+      status: 'published',
+      publishId: await FacebookService.publishPhotos(
+        images.map((i) => i.url),
+        caption,
+      ),
+    };
+  } catch (err) {
+    return {
+      status: 'failed',
+      error: err instanceof Error ? err.message : 'Erro desconhecido ao publicar no Facebook',
+    };
+  }
+}
+
 async function publishToInstagram(items: CarouselItem[], caption: string): Promise<string> {
   if (items.length > 1) return InstagramService.publishCarouselPost(items, caption);
   if (items[0].type === 'VIDEO') return InstagramService.publishReel(items[0].url, caption);
@@ -68,8 +106,10 @@ class PublishController {
    *  - `multipart/form-data`: `caption`, `project?`, `media` (1+ arquivos)
    *  - `application/json`: `{ caption, project?, media: [<asset local>|<url>, ...] }`
    *
+   * Depois do Instagram: TikTok e Facebook (Página), cada um não-fatal.
+   *
    * `?dryRun=1` resolve tudo e devolve o que *seria* publicado, sem chamar
-   * Meta/TikTok.
+   * Meta/TikTok/Facebook.
    */
   public async publish(req: Request, res: Response): Promise<void> {
     const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
@@ -119,7 +159,10 @@ class PublishController {
 
     try {
       const instagramMediaId = await publishToInstagram(items, caption);
-      const tiktok = await publishToTikTok(items, caption);
+      const [tiktok, facebook] = await Promise.all([
+        publishToTikTok(items, caption),
+        publishToFacebook(items, caption),
+      ]);
       const post = PostsService.save({
         ...base,
         status: 'published',
@@ -127,6 +170,9 @@ class PublishController {
         tiktokPublishId: tiktok.publishId,
         tiktokStatus: tiktok.status,
         tiktokError: tiktok.error,
+        facebookPostId: facebook.publishId,
+        facebookStatus: facebook.status,
+        facebookError: facebook.error,
       });
       sendSuccess(res, post, 201);
     } catch (err) {

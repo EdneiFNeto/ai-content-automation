@@ -4,10 +4,10 @@ export type { CarouselItem };
 
 export type PostStatus = 'published' | 'failed';
 
-// Resultado da publicação no TikTok, sempre tentada junto do Instagram:
-// "skipped" cobre casos sem equivalente na Content Posting API (ex.: carrossel
-// com vídeo), "failed" não derruba o post já publicado no Instagram.
-export type TikTokPublishOutcome = 'published' | 'skipped' | 'failed';
+// Resultado de uma publicação secundária (TikTok, Facebook), sempre tentada
+// depois do Instagram. "skipped" = sem equivalente ou não configurado;
+// "failed" nunca derruba o post que já foi ao ar no Instagram.
+export type SecondaryPublishOutcome = 'published' | 'skipped' | 'failed';
 
 /** Um post publicado (ou que falhou). Histórico em memória — ver PostsService. */
 export interface Post {
@@ -21,7 +21,10 @@ export interface Post {
   createdAt: string;
   instagramMediaId?: string;
   tiktokPublishId?: string;
-  tiktokStatus?: TikTokPublishOutcome;
+  tiktokStatus?: SecondaryPublishOutcome;
   tiktokError?: string;
+  facebookPostId?: string;
+  facebookStatus?: SecondaryPublishOutcome;
+  facebookError?: string;
   error?: string;
 }

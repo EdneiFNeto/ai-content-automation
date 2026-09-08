@@ -1,6 +1,6 @@
 # Ai-content-automation
 
-Backend em Node.js + TypeScript (Express) para automação de posts no Instagram (Meta Graph API) e TikTok (Content Posting API), com geração de imagem por IA via Gemini (Nano Banana).
+Backend em Node.js + TypeScript (Express) para automação de posts no Instagram (Meta Graph API), Facebook (Página) e TikTok (Content Posting API), com geração de imagem por IA via Gemini (Nano Banana).
 
 [Instagram](https://www.instagram.com/drabeatriznogueira.ai) & [Tiktok](https://www.tiktok.com/@bianutricionistaai) plataforma de automação de conteúdo baseada em IA para gerar, otimizar e publicar automaticamente conteúdos em contas de redes sociais, com foco no Instagram.
 
@@ -67,7 +67,7 @@ e este serviço publica. Ver [Publicando de vários projetos](#publicando-de-vá
 ## Como fazer um post — `POST /publish` (um passo só)
 
 Uma chamada: manda a mídia + a legenda, o servidor resolve tudo, decide o
-formato (imagem / Reel / carrossel) e publica no Instagram e depois no TikTok.
+formato (imagem / Reel / carrossel) e publica no Instagram, e depois tenta Facebook (Página) e TikTok.
 
 **Dois jeitos de mandar a mídia:**
 
@@ -111,7 +111,8 @@ direto).
   "data": {
     "id": "…", "status": "published", "project": "ironcrag-conquest",
     "instagramMediaId": "17901449796499675",
-    "tiktokStatus": "published", "tiktokPublishId": "…",
+    "facebookStatus": "published", "facebookPostId": "123_456",
+    "tiktokStatus": "skipped", "tiktokError": "…",
     "items": [ { "type": "IMAGE", "url": "https://…/assets/generated/01-home.png" } ]
   }
 }
@@ -120,6 +121,12 @@ direto).
 O `instagramMediaId` serve pra pegar o permalink na Graph API
 (`GET graph.instagram.com/v21.0/<id>?fields=permalink&access_token=…`).
 
+Depois do Instagram o serviço tenta **TikTok** e **Facebook (Página)**, cada um
+independente e **não-fatal** — `tiktokStatus` / `facebookStatus` na resposta
+(`published` / `skipped` / `failed`). Sem `FACEBOOK_PAGE_ID` +
+`FACEBOOK_PAGE_ACCESS_TOKEN` no `.env`, o Facebook fica `skipped`. Setup do token:
+[`FACEBOOK_INTEGRATION.md`](FACEBOOK_INTEGRATION.md).
+
 ### Ensaiar sem publicar — `?dryRun=1`
 
 ```bash
@@ -127,13 +134,13 @@ curl -F caption='teste' -F media=@01-home.png 'http://localhost:3000/publish?dry
 # → { "data": { "wouldPublish": { "type": "image", "caption": "teste", "mediaUrls": ["http://localhost:3000/assets/generated/01-home.png"] } } }
 ```
 
-Resolve a mídia (inclusive salva os uploads) mas **não** chama Meta/TikTok.
+Resolve a mídia (inclusive salva os uploads) mas **não** chama Meta/TikTok/Facebook.
 
 ## Testar rápido (só o serviço, sem ngrok)
 
 Sobe o servidor (`npm run dev`) e, noutro terminal, roda os `curl` abaixo — o
 `?dryRun=1` resolve/salva a mídia e devolve o que **publicaria**, sem chamar
-Instagram/TikTok. As imagens usadas já vêm no repo (`assets/`).
+Instagram/Facebook/TikTok. As imagens usadas já vêm no repo (`assets/`).
 
 ```bash
 cd ~/Dev/AI-projects/influencer   # os caminhos @assets/... são relativos daqui
@@ -230,7 +237,7 @@ faz exatamente isso: captura as telas → um `POST /publish` multipart.
 
 | Método | Rota                  | Descrição                              |
 | ------ | ---------------------- | ---------------------------------------- |
-| POST   | `/publish`             | **publica** (Instagram + TikTok) — multipart ou JSON; `?dryRun=1` ensaia |
+| POST   | `/publish`             | **publica** (Instagram + Facebook + TikTok) — multipart ou JSON; `?dryRun=1` ensaia |
 | GET    | `/posts`               | histórico do que foi publicado (memória) |
 | GET    | `/posts/:id`           | um item do histórico                     |
 | GET    | `/images/local`        | lista imagens em `assets/` e `assets/generated/` |

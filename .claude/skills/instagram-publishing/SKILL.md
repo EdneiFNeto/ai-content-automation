@@ -57,12 +57,18 @@ Passos no controller:
      `assets/generated/`, `assets/video/`); `path.basename` barra traversal;
    - `http(s)://…` → passa direto (tipo pela extensão).
 3. Formato decidido pela mídia: 1 imagem → `publishImagePost`; 1 vídeo →
-   `publishReel`; 2+ → `publishCarouselPost`. Depois `publishToTikTok` (nunca
-   lança — Instagram já publicado não pode cair por falha do TikTok).
+   `publishReel`; 2+ → `publishCarouselPost`. Depois, em `Promise.all`,
+   `publishToTikTok` **e** `publishToFacebook` — **nenhum lança** (Instagram já
+   publicado não pode cair por falha de rede secundária). Facebook sem
+   `FACEBOOK_PAGE_ID`/`_ACCESS_TOKEN` → `skipped` sem chamar a API. Detalhe:
+   [[../../../FACEBOOK_INTEGRATION.md]] e `facebook.service.ts`
+   (`graph.facebook.com`, Page token — host e token próprios, nada a ver com o
+   `IGAA…`).
 4. Grava o resultado em `PostsService.save()` (`status: 'published'` ou
-   `'failed'` + `error`).
+   `'failed'` + `error`; + `tiktok*` / `facebook*`).
 5. `?dryRun=1` → resolve tudo (salva os uploads!) e devolve
-   `{ wouldPublish: {type, caption, project, mediaUrls} }` sem chamar Meta/TikTok.
+   `{ wouldPublish: {type, caption, project, mediaUrls} }` sem chamar
+   Meta/TikTok/Facebook.
 
 `project` é texto livre, só atribuição — não muda nada.
 
