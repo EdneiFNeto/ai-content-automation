@@ -9,7 +9,7 @@ O fluxo usa a **Content Posting API** do TikTok via **Login Kit** (OAuth) + **PU
 ```
 GET  /auth/tiktok/login     → redireciona pro consentimento do TikTok
 GET  /auth/tiktok/callback  → troca "code" por access_token/refresh_token
-POST /posts/:id/publish     → publica no Instagram e, em seguida, no TikTok
+POST /publish               → publica no Instagram e, em seguida, no TikTok
 ```
 
 Arquivos relevantes:
@@ -17,7 +17,7 @@ Arquivos relevantes:
 - `src/services/tiktok.service.ts` — toda a chamada de rede pro TikTok (OAuth + publicação de vídeo/foto)
 - `src/controllers/tiktok-auth.controller.ts` + `src/routes/tiktok-auth.routes.ts` — fluxo OAuth
 - `src/controllers/legal.controller.ts` + `src/routes/legal.routes.ts` — páginas de Termos de Uso e Política de Privacidade (exigidas pelo cadastro do app)
-- `src/controllers/posts.controller.ts` — publica no TikTok logo depois do Instagram, sem derrubar o post se o TikTok falhar
+- `src/controllers/publish.controller.ts` — publica no TikTok logo depois do Instagram, sem derrubar o post se o TikTok falhar (`publishToTikTok`)
 - `public/` — pasta servida na raiz do domínio, usada para hospedar os arquivos de verificação de propriedade de URL do TikTok
 
 ## 1. Criar o app no TikTok for Developers
@@ -137,16 +137,16 @@ Ambos retornam um `publish_id`, que é consultado em `POST /v2/post/publish/stat
 
 Limites da API: vídeo até 4GB/10min; imagem até 20MB cada; a URL da mídia precisa ficar acessível por até 1h após o início do download.
 
-## 9. Integração com `/posts/:id/publish`
+## 9. Integração com `/publish`
 
-Toda vez que um post é publicado no Instagram, o mesmo conteúdo é automaticamente publicado no TikTok em seguida (lógica em `posts.controller.ts`, função `publishToTikTok`):
+Toda vez que um post é publicado no Instagram, o mesmo conteúdo é automaticamente publicado no TikTok em seguida (lógica em `publish.controller.ts`, função `publishToTikTok`):
 
-| Conteúdo do post | Instagram | TikTok |
+| Mídia (`items`) | Instagram | TikTok |
 |---|---|---|
-| `imageUrl` | Post de imagem | Foto única |
-| `videoUrl` | Reels | Vídeo |
-| `carouselItems` (só IMAGE) | Carrossel | Carrossel de fotos |
-| `carouselItems` (mistura IMAGE + VIDEO) | Carrossel | **Pulado** (`tiktokStatus: "skipped"`) — a API do TikTok não tem equivalente pra carrossel misto |
+| 1 imagem | Post de imagem | Foto única |
+| 1 vídeo | Reels | Vídeo |
+| 2+ imagens | Carrossel | Carrossel de fotos |
+| carrossel com vídeo | Carrossel | **Pulado** (`tiktokStatus: "skipped"`) — a API do TikTok não tem equivalente |
 
 Se a publicação no TikTok falhar por qualquer motivo, o post **continua marcado como `published`** (porque o Instagram já deu certo) — o erro fica registrado em `tiktokError`, sem derrubar a resposta. Ou seja, TikTok é sempre "melhor esforço", nunca bloqueia o Instagram.
 

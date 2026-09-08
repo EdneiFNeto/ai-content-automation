@@ -1,6 +1,9 @@
-import { randomUUID } from 'crypto';
-import { Post, CreatePostInput, UpdatePostInput } from '../types/post.types';
+import { Post } from '../types/post.types';
 
+/**
+ * Histórico em memória do que foi publicado (some quando o servidor reinicia).
+ * Só leitura pra fora; quem publica é o PublishController via `save`.
+ */
 class PostsService {
   private posts: Post[] = [];
 
@@ -12,31 +15,8 @@ class PostsService {
     return this.posts.find((post) => post.id === id);
   }
 
-  public create(input: CreatePostInput): Post {
-    const post: Post = {
-      id: randomUUID(),
-      content: input.content,
-      project: input.project,
-      imageUrl: input.imageUrl,
-      videoUrl: input.videoUrl,
-      carouselItems: input.carouselItems,
-      status: input.scheduledFor ? 'scheduled' : 'draft',
-      scheduledFor: input.scheduledFor,
-      createdAt: new Date().toISOString(),
-    };
-
+  public save(post: Post): Post {
     this.posts.push(post);
-    return post;
-  }
-
-  public update(id: string, patch: UpdatePostInput): Post {
-    const post = this.findById(id);
-
-    if (!post) {
-      throw new Error(`Post ${id} não encontrado`);
-    }
-
-    Object.assign(post, patch);
     return post;
   }
 }

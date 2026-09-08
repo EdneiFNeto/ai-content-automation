@@ -64,34 +64,83 @@ e este serviço publica. Ver [Publicando de vários projetos](#publicando-de-vá
 | `npm run format`        | formata o código com Prettier                    |
 | `npm run format:check`  | só verifica a formatação, sem alterar arquivos    |
 
-## Como postar uma imagem já existente (biblioteca local)
+## Como fazer um post — `POST /publish` (um passo só)
 
-Sem precisar gerar nada por IA: qualquer imagem em `assets/` (ou já gerada antes em `assets/generated/`) pode virar post direto pelo nome do arquivo.
+Uma chamada: manda a mídia + a legenda, o servidor resolve tudo, decide o
+formato (imagem / Reel / carrossel) e publica no Instagram e depois no TikTok.
 
-Primeiro, veja quais imagens estão disponíveis:
+**Dois jeitos de mandar a mídia:**
+
+### a) Upload dos arquivos — `multipart/form-data`
 
 ```bash
-curl http://localhost:3000/images/local
+curl -F caption='Minha legenda' \
+     -F project='ironcrag-conquest' \
+     -F media=@01-home.png \
+     -F media=@05-battle.png \
+     http://localhost:3000/publish
 ```
+
+`media` repetido = os itens do carrossel, **na ordem**. 1 arquivo → post
+simples; vídeo `.mp4` → Reel; 2+ → carrossel. Aceita `image/png|jpeg|webp` e
+`video/mp4|quicktime`, até 64 MB por arquivo, 10 no total. `project` é opcional
+(texto livre, só atribuição).
+
+### b) Referências — `application/json`
+
+```bash
+curl -X POST http://localhost:3000/publish -H 'content-type: application/json' -d '{
+  "caption": "Minha legenda",
+  "project": "ironcrag-conquest",
+  "media": [
+    "profile.png",
+    "https://outro-storage.com/foto.jpg"
+  ]
+}'
+```
+
+Cada item de `media` é **um nome de arquivo em `assets/` / `assets/generated/` /
+`assets/video/`** (o servidor monta a URL pública) **ou uma URL http(s)** (passa
+direto).
+
+### Resposta
 
 ```json
 {
   "success": true,
-  "data": [
-    { "fileName": "profile.png", "source": "library", "imageUrl": "http://localhost:3000/assets/profile.png" }
-  ]
+  "data": {
+    "id": "…", "status": "published", "project": "ironcrag-conquest",
+    "instagramMediaId": "17901449796499675",
+    "tiktokStatus": "published", "tiktokPublishId": "…",
+    "items": [ { "type": "IMAGE", "url": "https://…/assets/generated/01-home.png" } ]
+  }
 }
 ```
 
-Depois, crie o post passando `imageFileName` em vez de `imageUrl` — o servidor resolve a URL pública sozinho:
+O `instagramMediaId` serve pra pegar o permalink na Graph API
+(`GET graph.instagram.com/v21.0/<id>?fields=permalink&access_token=…`).
+
+### Ensaiar sem publicar — `?dryRun=1`
 
 ```bash
-curl -X POST http://localhost:3000/posts \
-  -H "Content-Type: application/json" \
-  -d '{ "content": "Legenda aqui", "imageFileName": "profile.png" }'
+curl -F caption='teste' -F media=@01-home.png 'http://localhost:3000/publish?dryRun=1'
+# → { "data": { "wouldPublish": { "type": "image", "caption": "teste", "mediaUrls": ["http://localhost:3000/assets/generated/01-home.png"] } } }
 ```
 
-Não envie `imageUrl` e `imageFileName` juntos — é um ou outro. Vale a mesma restrição de URL pública explicada [abaixo](#-a-imagem-precisa-ser-pública): o Instagram só publica se a imagem for alcançável pela internet, então em dev ainda é preciso expor o servidor (ngrok) mesmo usando `imageFileName`.
+Resolve a mídia (inclusive salva os uploads) mas **não** chama Meta/TikTok.
+
+### ⚠️ A mídia precisa ser pública
+
+A Meta/TikTok baixam a mídia **pela internet** a partir da URL — não alcançam
+`localhost`. Em dev, exponha o servidor com [ngrok](https://ngrok.com/):
+
+```bash
+ngrok http 3000
+```
+
+Aí as URLs que o servidor monta (`/assets/generated/…`) saem já com o host
+público (`trust proxy` está ligado). Em produção, use a URL real do servidor
+(ou um storage externo).
 
 ## Como gerar uma imagem com IA (Gemini / Nano Banana)
 
@@ -123,124 +172,28 @@ Resposta:
 }
 ```
 
-A imagem fica salva em `assets/generated/` (não versionada) e servida em `/assets/generated/<arquivo>`. Use o `imageUrl` retornado direto como `imageUrl` na criação do post (passo seguinte) — vale a mesma restrição de URL pública explicada abaixo.
-
-## Como fazer um post no Instagram
-
-A publicação acontece em duas etapas: primeiro você cria o post (fica como rascunho), depois manda publicar.
-
-### 1. Criar o post
-
-```bash
-curl -X POST http://localhost:3000/posts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "content": "Legenda do post aqui",
-    "imageUrl": "https://sua-url-publica.com/foto.jpg"
-  }'
-```
-
-(ou use `imageFileName` em vez de `imageUrl` para referenciar uma imagem local — ver seção acima)
-
-Resposta:
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid-do-post",
-    "content": "Legenda do post aqui",
-    "imageUrl": "https://sua-url-publica.com/foto.jpg",
-    "status": "draft",
-    "createdAt": "2026-08-04T02:33:05.859Z"
-  }
-}
-```
-
-Guarde o `id` retornado — é ele que você usa no próximo passo.
-
-### 2. Publicar no Instagram
-
-```bash
-curl -X POST http://localhost:3000/posts/<id-do-post>/publish
-```
-
-Se der certo, o post volta com `status: "published"` e um `instagramMediaId`:
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid-do-post",
-    "status": "published",
-    "instagramMediaId": "17901449796499675",
-    "...": "..."
-  }
-}
-```
-
-Esse `instagramMediaId` pode ser usado para consultar o post direto na Graph API (ex.: `GET https://graph.instagram.com/v21.0/<instagramMediaId>?fields=permalink&access_token=...`) e pegar o link permanente do post.
-
-### ⚠️ A imagem precisa ser pública
-
-O Instagram busca a imagem a partir da própria internet — `imageUrl` **não pode** apontar para `localhost` ou uma rede interna. Em desenvolvimento, a forma mais simples é expor o servidor local com [ngrok](https://ngrok.com/):
-
-```bash
-ngrok http 3000
-```
-
-Isso gera uma URL pública (`https://algo.ngrok-free.dev`). As imagens da pasta `assets/` ficam disponíveis em `/assets/<arquivo>`, então a `imageUrl` do post seria algo como:
-
-```
-https://algo.ngrok-free.dev/assets/profile.png
-```
-
-Em produção, use a URL pública real do servidor (ou um storage externo, como S3/Cloudinary).
-
-### Outros endpoints
-
-| Método | Rota                  | Descrição                              |
-| ------ | ---------------------- | ---------------------------------------- |
-| GET    | `/posts`               | lista todos os posts                     |
-| GET    | `/posts/:id`           | detalhes de um post                      |
-| POST   | `/posts`               | cria um post (rascunho) — `imageUrl`/`imageFileName`/`videoUrl`/`videoFileName`/`carouselItems`, `project` opcional |
-| POST   | `/posts/:id/publish`   | publica no Instagram e, em seguida, no TikTok |
-| GET    | `/images/local`        | lista imagens disponíveis em `assets/` e `assets/generated/` |
-| POST   | `/images/generate`     | gera uma imagem a partir de um prompt (Gemini) |
-| POST   | `/assets`              | sobe uma imagem/vídeo (corpo cru) → `{ fileName, url }` |
+A imagem fica salva em `assets/generated/` (não versionada) e servida em `/assets/generated/<arquivo>`. Use o nome do arquivo (ou a `imageUrl`) em `media` no `POST /publish` — mesma restrição de URL pública descrita acima.
 
 ## Publicando de vários projetos
 
-Qualquer projeto publica sem compartilhar sistema de arquivos com este repo —
-só HTTP:
+Não é de um projeto/perfil só. A conta de destino é a do `.env`; qualquer
+projeto (o jogo *Ironcrag Conquest*, o perfil de nutrição, etc.) publica com
+**um `POST /publish`** — via upload multipart ou via nomes/URLs (seções acima).
+`project` no corpo marca a origem. O `tool/promo/` do repo `ironcrag_conquest`
+faz exatamente isso: captura as telas → um `POST /publish` multipart.
 
-1. **Sobe a mídia** — `POST /assets` com os bytes no corpo, `Content-Type` do
-   arquivo, nome opcional em `?name=`:
-   ```bash
-   curl -X POST "http://localhost:3000/assets?name=01-home.png" \
-     -H "Content-Type: image/png" --data-binary @01-home.png
-   # → { "success": true, "data": { "fileName": "01-home.png",
-   #     "url": "http://localhost:3000/assets/generated/01-home.png" } }
-   ```
-   Aceita `image/png|jpeg|webp` e `video/mp4|quicktime`, até 64 MB. Salva em
-   `assets/generated/` (mesma pasta do Gemini). A URL devolvida já respeita
-   proxy/ngrok (`trust proxy`).
+## Endpoints
 
-2. **Cria o post** com as URLs devolvidas + `project` pra atribuição:
-   ```bash
-   curl -X POST http://localhost:3000/posts -H "Content-Type: application/json" -d '{
-     "content": "Legenda…", "project": "ironcrag-conquest",
-     "carouselItems": [
-       { "type": "IMAGE", "imageUrl": "https://…/assets/generated/01-home.png" },
-       { "type": "IMAGE", "imageUrl": "https://…/assets/generated/02-choose.png" }
-     ]
-   }'
-   ```
-
-3. **Publica** — `POST /posts/:id/publish`.
-
-`project` é texto livre, só pra rastrear a origem — não muda o comportamento.
-O `tool/promo/` do repo `ironcrag_conquest` já faz esse fluxo ponta a ponta.
+| Método | Rota                  | Descrição                              |
+| ------ | ---------------------- | ---------------------------------------- |
+| POST   | `/publish`             | **publica** (Instagram + TikTok) — multipart ou JSON; `?dryRun=1` ensaia |
+| GET    | `/posts`               | histórico do que foi publicado (memória) |
+| GET    | `/posts/:id`           | um item do histórico                     |
+| GET    | `/images/local`        | lista imagens em `assets/` e `assets/generated/` |
+| POST   | `/images/generate`     | gera uma imagem a partir de um prompt (Gemini) |
+| GET    | `/assets`              | imagens de destaque do influencer (legado) |
+| GET    | `/auth/tiktok/login`   | inicia o OAuth do TikTok |
+| GET/POST | `/legal/{terms,privacy}` | páginas exigidas pelo TikTok |
 
 ## Estrutura do projeto
 

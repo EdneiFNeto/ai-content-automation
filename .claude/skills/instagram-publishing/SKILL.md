@@ -33,47 +33,48 @@ A Graph API busca a imagem a partir do `image_url` enviado — **o servidor da M
 - IPs de rede local
 - URLs atrás de autenticação
 
-Para publicar de verdade, `imageUrl` do post precisa apontar para um host público (HTTPS), seja o próprio servidor exposto publicamente (deploy, túnel como ngrok em dev) servindo `/assets`, seja um storage externo (S3, Cloudinary, etc.). Essa restrição vale mesmo usando `imageFileName` (ver abaixo) — só muda quem monta a URL, não a exigência de ela ser pública.
+Para publicar de verdade, a URL da mídia precisa apontar para um host público (HTTPS), seja o próprio servidor exposto publicamente (deploy, túnel como ngrok em dev) servindo `/assets`, seja um storage externo (S3, Cloudinary, etc.). Vale mesmo mandando a mídia por upload ou por nome de asset — o servidor monta a URL, mas ela ainda precisa ser alcançável pela Meta.
 
-## Receber mídia de outro projeto (`POST /assets`)
+## O endpoint: `POST /publish` (um passo só)
 
-`POST /assets` recebe os bytes de uma imagem/vídeo no corpo cru (`Content-Type`
-do arquivo, nome opcional em `?name=`), salva em `assets/generated/` via
-`AssetUploadService`, e devolve `{ fileName, url }` — a `url` já sai pública
-(usa `buildAssetUrl` / `trust proxy`). É por aí que outros repos de jogo mandam
-o conteúdo sem compartilhar disco: `POST /assets` (uma vez por arquivo) →
-`POST /posts` com as `imageUrl`/`videoUrl` devolvidas + `project` →
-`POST /posts/:id/publish`. `project` é texto livre no post (só atribuição, não
-muda nada). Aceita `image/png|jpeg|webp`, `video/mp4|quicktime`, até 64 MB.
-Rota com `express.raw({ type: () => true })` — a validação de tipo é no service.
+`src/controllers/publish.controller.ts` + `src/routes/publish.routes.ts`. **É o
+único caminho de publicação** — não existe mais `POST /assets` nem o fluxo de
+rascunho `POST /posts` + `/posts/:id/publish` (removidos). `GET /posts` /
+`/posts/:id` sobraram só como histórico em memória (`PostsService`).
 
-## Criar o post a partir de uma imagem local (`imageFileName`)
+Corpo aceito:
+- **`multipart/form-data`** (`multer` memoryStorage, `upload.array('media', 10)`):
+  `caption`, `project?`, `media` (1+ arquivos).
+- **`application/json`**: `{ caption, project?, media: [<nome de asset> | <url http(s)>, ...] }`.
 
-`POST /posts` aceita `imageFileName` como alternativa a `imageUrl` — referencia um arquivo já existente em `assets/` (biblioteca) ou `assets/generated/` (gerado pelo Gemini) pelo nome, sem precisar montar a URL pública na mão. Implementado em `LocalImagesService.resolve()` (`src/services/local-images.service.ts`) + `resolveLocalImageUrl()` em `posts.controller.ts`.
+Passos no controller:
+1. `caption` obrigatório (400 se vazio); `media` obrigatório (400 se nenhum);
+   upload **e** `media[]` juntos → 400.
+2. `media-resolver.service.ts` transforma cada entrada em `CarouselItem`
+   (`{type, url}` com URL pública):
+   - upload → `AssetUploadService.save()` → `assets/generated/` → `buildAssetUrl`;
+   - nome → `LocalImagesService`/`LocalVideosService.resolve()` (`assets/`,
+     `assets/generated/`, `assets/video/`); `path.basename` barra traversal;
+   - `http(s)://…` → passa direto (tipo pela extensão).
+3. Formato decidido pela mídia: 1 imagem → `publishImagePost`; 1 vídeo →
+   `publishReel`; 2+ → `publishCarouselPost`. Depois `publishToTikTok` (nunca
+   lança — Instagram já publicado não pode cair por falha do TikTok).
+4. Grava o resultado em `PostsService.save()` (`status: 'published'` ou
+   `'failed'` + `error`).
+5. `?dryRun=1` → resolve tudo (salva os uploads!) e devolve
+   `{ wouldPublish: {type, caption, project, mediaUrls} }` sem chamar Meta/TikTok.
 
-- Nunca envie `imageUrl` e `imageFileName` juntos — o controller responde `400`.
-- `imageFileName` inexistente (em nenhuma das duas pastas) → `400`.
-- `LocalImagesService.resolve()` usa `path.basename()` no nome recebido antes de checar o disco — protege contra path traversal (`../../etc/passwd` vira só `passwd`, que não existe nas pastas conhecidas).
-- `GET /images/local` lista o que está disponível (`fileName`, `source`, `imageUrl` já pronta) — útil para descobrir nomes de arquivo sem precisar de acesso ao disco do servidor.
+`project` é texto livre, só atribuição — não muda nada.
 
-Hoje esse é o caminho padrão do projeto (evita o custo do Gemini) — ver [[image-generation-gemini]] para quando fizer sentido voltar a gerar imagem por IA em vez de usar a biblioteca local.
-
-## Fluxo de publicação de um post
-
-`POST /posts/:id/publish` (`src/controllers/posts.controller.ts#publish`):
-
-1. Busca o post por `id` — 404 se não existir.
-2. Exige `post.imageUrl` — 400 se ausente (Instagram não publica só texto via este fluxo). Note que isso já é o `imageUrl` resolvido — não importa se o post foi criado com `imageUrl` direto ou com `imageFileName`.
-3. Chama `InstagramService.publishImagePost(imageUrl, content)`.
-4. Sucesso: atualiza o post para `status: 'published'` e grava `instagramMediaId`.
-5. Falha: atualiza o post para `status: 'failed'` e relança o erro (o middleware central formata a resposta — ver [[api-response-conventions]]).
-
-Ao estender esse fluxo (ex.: publicar carrossel, vídeo/Reels, ou agendar via `scheduledFor`), manter o mesmo padrão: toda chamada de rede para a Meta isolada em `instagram.service.ts`, nunca no controller.
+Toda chamada de rede pra Meta continua isolada em `instagram.service.ts`
+(2 etapas: `POST /{ig-id}/media` → `POST /{ig-id}/media_publish`), pro TikTok
+em `tiktok.service.ts`. Controller nunca fala com API externa direto.
 
 ## Testes
 
-Nunca bater na Graph API real em teste. Dois padrões usados:
+Nunca bater na Graph API real em teste. Padrões:
 - **Unit do service** (`instagram.service.test.ts`): mocka `global.fetch` com `jest.spyOn`.
-- **Teste de rota** (`posts.routes.test.ts`): mocka o módulo inteiro com `jest.mock('../services/instagram.service', ...)` e controla o retorno de `publishImagePost`.
+- **Teste de rota** (`publish.routes.test.ts`): `jest.mock('../services/instagram.service', …)` + `tiktok.service` + `asset-upload.service` (pra não escrever no disco), e controla os retornos.
+- `asset-upload.service.test.ts` cobre a escrita real (traversal, extensão, tipo).
 
 Ver [[testing-jest]] para convenções gerais de teste.
