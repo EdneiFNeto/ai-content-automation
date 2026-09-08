@@ -129,6 +129,50 @@ curl -F caption='teste' -F media=@01-home.png 'http://localhost:3000/publish?dry
 
 Resolve a mídia (inclusive salva os uploads) mas **não** chama Meta/TikTok.
 
+## Testar rápido (só o serviço, sem ngrok)
+
+Sobe o servidor (`npm run dev`) e, noutro terminal, roda os `curl` abaixo — o
+`?dryRun=1` resolve/salva a mídia e devolve o que **publicaria**, sem chamar
+Instagram/TikTok. As imagens usadas já vêm no repo (`assets/`).
+
+```bash
+cd ~/Dev/AI-projects/influencer   # os caminhos @assets/... são relativos daqui
+
+# JSON — referencia imagens que já estão em assets/
+curl -s -X POST 'http://localhost:3000/publish?dryRun=1' \
+  -H 'content-type: application/json' \
+  -d '{"caption":"teste 123","project":"sandbox","media":["profile.png","Character_model.jpeg"]}' | jq
+
+# Multipart — upload de arquivo
+curl -s -F caption='teste multipart' -F project=sandbox \
+     -F media=@assets/profile.png \
+     -F media=@assets/Character_model.jpeg \
+     'http://localhost:3000/publish?dryRun=1' | jq
+
+# Erros esperados (400)
+curl -s -X POST 'http://localhost:3000/publish?dryRun=1' -H 'content-type: application/json' \
+  -d '{"media":["profile.png"]}' | jq                    # sem "caption"
+curl -s -X POST 'http://localhost:3000/publish?dryRun=1' -H 'content-type: application/json' \
+  -d '{"caption":"x","media":["nao-existe.png"]}' | jq   # mídia inexistente
+
+# Histórico do que já foi publicado (vazio enquanto só rodar dryRun)
+curl -s http://localhost:3000/posts | jq
+```
+
+**Post real** (posta de verdade na conta do `.env`) — tira o `?dryRun=1` e o
+servidor precisa estar público:
+
+```bash
+# terminal 2
+ngrok http 3000 --domain=SEU-DOMINIO.ngrok-free.dev
+
+# terminal 3
+curl -s -F caption='post de teste' -F project=sandbox \
+     -F media=@assets/profile.png -F media=@assets/Character_model.jpeg \
+     https://SEU-DOMINIO.ngrok-free.dev/publish | jq
+# → { "data": { "status": "published", "instagramMediaId": "...", "tiktokStatus": "..." } }
+```
+
 ### ⚠️ A mídia precisa ser pública
 
 A Meta/TikTok baixam a mídia **pela internet** a partir da URL — não alcançam
