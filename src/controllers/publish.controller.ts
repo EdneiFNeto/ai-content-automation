@@ -73,7 +73,10 @@ class PublishController {
    */
   public async publish(req: Request, res: Response): Promise<void> {
     const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
-    const caption = typeof req.body.caption === 'string' ? req.body.caption.trim() : '';
+    // multipart normaliza quebras de linha pra CRLF (RFC 7578) — desfaz, senão a
+    // legenda no Instagram fica com \r sobrando.
+    const caption =
+      typeof req.body.caption === 'string' ? req.body.caption.replace(/\r\n?/g, '\n').trim() : '';
     const project =
       typeof req.body.project === 'string' && req.body.project.trim()
         ? req.body.project.trim()
