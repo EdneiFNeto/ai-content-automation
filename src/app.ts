@@ -4,6 +4,8 @@ import userRoutes from './routes/user.routes';
 import assetRoutes from './routes/asset.routes';
 import postsRoutes from './routes/posts.routes';
 import imagesRoutes from './routes/images.routes';
+import tiktokAuthRoutes from './routes/tiktok-auth.routes';
+import legalRoutes from './routes/legal.routes';
 import { errorHandler } from './middlewares/error-handler.middleware';
 
 const app = express();
@@ -19,11 +21,17 @@ app.use(express.json());
 // Isso resolve o erro "Cannot GET" se o arquivo existir na pasta
 app.use('/assets', express.static(path.resolve(__dirname, '../assets')));
 
+// Arquivos servidos na raiz do domínio (ex.: arquivo de verificação de
+// propriedade de URL do TikTok, que precisa estar em /<nome-do-arquivo>.txt)
+app.use(express.static(path.resolve(__dirname, '../public')));
+
 // Registro das rotas
 app.use('/users', userRoutes);
 app.use('/assets', assetRoutes);
 app.use('/posts', postsRoutes);
 app.use('/images', imagesRoutes);
+app.use('/auth/tiktok', tiktokAuthRoutes);
+app.use('/legal', legalRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Servidor TypeScript configurado com sucesso!' });

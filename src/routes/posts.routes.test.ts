@@ -2,14 +2,27 @@ import request from 'supertest';
 
 jest.mock('../services/instagram.service', () => ({
   __esModule: true,
-  default: { publishImagePost: jest.fn(), publishCarouselPost: jest.fn() },
+  default: {
+    publishImagePost: jest.fn(),
+    publishCarouselPost: jest.fn(),
+    publishReel: jest.fn(),
+  },
+}));
+
+jest.mock('../services/tiktok.service', () => ({
+  __esModule: true,
+  default: { publishVideo: jest.fn(), publishPhoto: jest.fn() },
 }));
 
 import app from '../app';
 import InstagramService from '../services/instagram.service';
+import TikTokService from '../services/tiktok.service';
 
 const publishImagePostMock = InstagramService.publishImagePost as jest.Mock;
 const publishCarouselPostMock = InstagramService.publishCarouselPost as jest.Mock;
+const publishReelMock = InstagramService.publishReel as jest.Mock;
+const tiktokPublishVideoMock = TikTokService.publishVideo as jest.Mock;
+const tiktokPublishPhotoMock = TikTokService.publishPhoto as jest.Mock;
 
 describe('POST /posts', () => {
   it('cria um post com sucesso', async () => {
@@ -71,7 +84,7 @@ describe('POST /posts', () => {
     expect(res.status).toBe(201);
     expect(res.body.data.carouselItems).toEqual([
       { type: 'IMAGE', url: 'https://example.com/foto.jpg' },
-      { type: 'VIDEO', url: expect.stringMatching(/\/assets\/video-01\.mp4$/) },
+      { type: 'VIDEO', url: expect.stringMatching(/\/assets\/video\/video-01\.mp4$/) },
     ]);
   });
 
@@ -141,6 +154,9 @@ describe('POST /posts/:id/publish', () => {
   afterEach(() => {
     publishImagePostMock.mockReset();
     publishCarouselPostMock.mockReset();
+    publishReelMock.mockReset();
+    tiktokPublishVideoMock.mockReset();
+    tiktokPublishPhotoMock.mockReset();
   });
 
   it('publica carrossel no Instagram e marca o post como "published"', async () => {
@@ -218,5 +234,105 @@ describe('POST /posts/:id/publish', () => {
 
     const getRes = await request(app).get(`/posts/${created.body.data.id}`);
     expect(getRes.body.data.status).toBe('failed');
+  });
+
+  it('publica no Instagram e no TikTok quando o post tem imagem', async () => {
+    publishImagePostMock.mockResolvedValueOnce('media-123');
+    tiktokPublishPhotoMock.mockResolvedValueOnce('tiktok-photo-1');
+
+    const created = await request(app)
+      .post('/posts')
+      .send({ content: 'Post com imagem', imageUrl: 'https://example.com/foto.jpg' });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('published');
+    expect(res.body.data.tiktokStatus).toBe('published');
+    expect(res.body.data.tiktokPublishId).toBe('tiktok-photo-1');
+    expect(tiktokPublishPhotoMock).toHaveBeenCalledWith(
+      ['https://example.com/foto.jpg'],
+      'Post com imagem',
+    );
+  });
+
+  it('publica vídeo no Instagram (Reels) e no TikTok', async () => {
+    publishReelMock.mockResolvedValueOnce('media-reel-1');
+    tiktokPublishVideoMock.mockResolvedValueOnce('tiktok-video-1');
+
+    const created = await request(app)
+      .post('/posts')
+      .send({ content: 'Post em vídeo', videoUrl: 'https://example.com/video.mp4' });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tiktokStatus).toBe('published');
+    expect(res.body.data.tiktokPublishId).toBe('tiktok-video-1');
+    expect(tiktokPublishVideoMock).toHaveBeenCalledWith(
+      'https://example.com/video.mp4',
+      'Post em vídeo',
+    );
+  });
+
+  it('mantém o post "published" quando o Instagram funciona mas o TikTok falha', async () => {
+    publishImagePostMock.mockResolvedValueOnce('media-123');
+    tiktokPublishPhotoMock.mockRejectedValueOnce(new Error('Falha ao publicar foto no TikTok'));
+
+    const created = await request(app)
+      .post('/posts')
+      .send({ content: 'Post com imagem', imageUrl: 'https://example.com/foto.jpg' });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('published');
+    expect(res.body.data.tiktokStatus).toBe('failed');
+    expect(res.body.data.tiktokError).toBe('Falha ao publicar foto no TikTok');
+  });
+
+  it('pula o TikTok quando o carrossel mistura foto e vídeo', async () => {
+    publishCarouselPostMock.mockResolvedValueOnce('media-carousel-1');
+
+    const created = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Post em carrossel',
+        carouselItems: [
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'VIDEO', videoUrl: 'https://example.com/video.mp4' },
+        ],
+      });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tiktokStatus).toBe('skipped');
+    expect(tiktokPublishPhotoMock).not.toHaveBeenCalled();
+    expect(tiktokPublishVideoMock).not.toHaveBeenCalled();
+  });
+
+  it('publica carrossel de fotos no TikTok quando todos os itens são imagem', async () => {
+    publishCarouselPostMock.mockResolvedValueOnce('media-carousel-2');
+    tiktokPublishPhotoMock.mockResolvedValueOnce('tiktok-photo-carousel-1');
+
+    const created = await request(app)
+      .post('/posts')
+      .send({
+        content: 'Post em carrossel',
+        carouselItems: [
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto.jpg' },
+          { type: 'IMAGE', imageUrl: 'https://example.com/foto2.jpg' },
+        ],
+      });
+
+    const res = await request(app).post(`/posts/${created.body.data.id}/publish`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tiktokStatus).toBe('published');
+    expect(tiktokPublishPhotoMock).toHaveBeenCalledWith(
+      ['https://example.com/foto.jpg', 'https://example.com/foto2.jpg'],
+      'Post em carrossel',
+    );
   });
 });

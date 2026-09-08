@@ -4,6 +4,8 @@ import { LocalVideo, LocalVideoSource } from '../types/local-video.types';
 
 const ASSETS_DIR = path.resolve(__dirname, '../../assets');
 const GENERATED_DIR = path.resolve(ASSETS_DIR, 'generated');
+// Vídeos da biblioteca ficam em assets/video/ (imagens ficam na raiz de assets/).
+const VIDEO_DIR = path.resolve(ASSETS_DIR, 'video');
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov']);
 
 async function listVideoFiles(dir: string): Promise<string[]> {
@@ -31,14 +33,16 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 class LocalVideosService {
   public async list(): Promise<LocalVideo[]> {
-    const [library, generated] = await Promise.all([
+    const [library, generated, video] = await Promise.all([
       listVideoFiles(ASSETS_DIR),
       listVideoFiles(GENERATED_DIR),
+      listVideoFiles(VIDEO_DIR),
     ]);
 
     return [
       ...library.map((fileName) => ({ fileName, source: 'library' as const })),
       ...generated.map((fileName) => ({ fileName, source: 'generated' as const })),
+      ...video.map((fileName) => ({ fileName, source: 'video' as const })),
     ];
   }
 
@@ -55,6 +59,10 @@ class LocalVideosService {
 
     if (await fileExists(path.join(GENERATED_DIR, safeName))) {
       return { fileName: safeName, source: 'generated' };
+    }
+
+    if (await fileExists(path.join(VIDEO_DIR, safeName))) {
+      return { fileName: safeName, source: 'video' };
     }
 
     return undefined;

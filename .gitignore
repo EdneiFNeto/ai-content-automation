@@ -4,3 +4,9 @@ coverage
 .env
 .DS_Store
 assets/generated
+*.txt
+
+# Vídeos são pesados — ficam locais (os que já estão versionados seguem, mas
+# nada novo entra). Para publicar por URL, use assets/generated ou storage externo.
+assets/video/*.mp4
+assets/video/*.mov

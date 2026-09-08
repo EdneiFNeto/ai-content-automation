@@ -149,7 +149,9 @@ describe('InstagramService.publishCarouselPost', () => {
 
   it('lança AppError quando menos de 2 itens são enviados', async () => {
     await expect(
-      InstagramService.publishCarouselPost([{ type: 'IMAGE', url: 'https://example.com/foto.jpg' }]),
+      InstagramService.publishCarouselPost([
+        { type: 'IMAGE', url: 'https://example.com/foto.jpg' },
+      ]),
     ).rejects.toThrow(/entre 2 e 10 itens/);
   });
 

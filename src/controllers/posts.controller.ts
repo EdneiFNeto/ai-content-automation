@@ -1,12 +1,13 @@
 import { Request, Response } from 'express';
 import PostsService from '../services/posts.service';
 import InstagramService from '../services/instagram.service';
+import TikTokService from '../services/tiktok.service';
 import LocalImagesService from '../services/local-images.service';
 import LocalVideosService from '../services/local-videos.service';
 import { sendSuccess } from '../utils/api-response';
 import { buildAssetUrl } from '../utils/public-url';
 import { AppError } from '../errors/app-error';
-import { CarouselItem } from '../types/post.types';
+import { CarouselItem, Post, TikTokPublishOutcome } from '../types/post.types';
 
 // Referencia um arquivo já existente em assets/ ou assets/generated/ pelo nome,
 // sem precisar montar a URL pública na mão a cada post. Função solta (não método de
@@ -25,6 +26,8 @@ async function resolveLocalImageUrl(req: Request, imageFileName: string): Promis
   );
 }
 
+const VIDEO_URL_PREFIX: Record<string, string> = { generated: 'generated/', video: 'video/' };
+
 async function resolveLocalVideoUrl(req: Request, videoFileName: string): Promise<string> {
   const match = await LocalVideosService.resolve(videoFileName);
 
@@ -32,10 +35,7 @@ async function resolveLocalVideoUrl(req: Request, videoFileName: string): Promis
     throw new AppError(`Vídeo local "${videoFileName}" não encontrado`, 400);
   }
 
-  return buildAssetUrl(
-    req,
-    match.source === 'generated' ? `generated/${match.fileName}` : match.fileName,
-  );
+  return buildAssetUrl(req, `${VIDEO_URL_PREFIX[match.source] ?? ''}${match.fileName}`);
 }
 
 interface RawCarouselItem {
@@ -55,7 +55,10 @@ async function resolveCarouselItem(
   index: number,
 ): Promise<CarouselItem> {
   if (item.type !== 'IMAGE' && item.type !== 'VIDEO') {
-    throw new AppError(`Item ${index} de "carouselItems" precisa de "type": "IMAGE" ou "VIDEO"`, 400);
+    throw new AppError(
+      `Item ${index} de "carouselItems" precisa de "type": "IMAGE" ou "VIDEO"`,
+      400,
+    );
   }
 
   if (item.type === 'IMAGE') {
@@ -85,6 +88,49 @@ async function resolveCarouselItem(
   return { type: 'VIDEO', url };
 }
 
+interface TikTokPublishResult {
+  status: TikTokPublishOutcome;
+  publishId?: string;
+  error?: string;
+}
+
+// Toda publicação no Instagram tenta o equivalente no TikTok logo em seguida.
+// Nunca lança: uma falha aqui não pode derrubar um post que já publicou com
+// sucesso no Instagram — o resultado (inclusive erro) só fica registrado à parte.
+async function publishToTikTok(post: Post): Promise<TikTokPublishResult> {
+  try {
+    if (post.videoUrl) {
+      const publishId = await TikTokService.publishVideo(post.videoUrl, post.content);
+      return { status: 'published', publishId };
+    }
+
+    if (post.carouselItems) {
+      if (post.carouselItems.some((item) => item.type === 'VIDEO')) {
+        return {
+          status: 'skipped',
+          error: 'TikTok não suporta carrossel misto de foto e vídeo',
+        };
+      }
+
+      const publishId = await TikTokService.publishPhoto(
+        post.carouselItems.map((item) => item.url),
+        post.content,
+      );
+      return { status: 'published', publishId };
+    }
+
+    if (post.imageUrl) {
+      const publishId = await TikTokService.publishPhoto([post.imageUrl], post.content);
+      return { status: 'published', publishId };
+    }
+
+    return { status: 'skipped', error: 'Post sem mídia para publicar no TikTok' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro desconhecido ao publicar no TikTok';
+    return { status: 'failed', error: message };
+  }
+}
+
 class PostsController {
   public async list(req: Request, res: Response): Promise<void> {
     sendSuccess(res, PostsService.list());
@@ -101,16 +147,27 @@ class PostsController {
   }
 
   public async create(req: Request, res: Response): Promise<void> {
-    const { content, imageUrl, imageFileName, videoUrl, videoFileName, carouselItems, scheduledFor } =
-      req.body;
+    const {
+      content,
+      imageUrl,
+      imageFileName,
+      videoUrl,
+      videoFileName,
+      carouselItems,
+      scheduledFor,
+    } = req.body;
 
     if (!content) {
       throw new AppError('O campo "content" é obrigatório', 400);
     }
 
-    const mediaFieldsProvided = [imageUrl, imageFileName, videoUrl, videoFileName, carouselItems].filter(
-      Boolean,
-    ).length;
+    const mediaFieldsProvided = [
+      imageUrl,
+      imageFileName,
+      videoUrl,
+      videoFileName,
+      carouselItems,
+    ].filter(Boolean).length;
 
     if (mediaFieldsProvided > 1) {
       throw new AppError(
@@ -160,7 +217,7 @@ class PostsController {
 
     if (!post.imageUrl && !post.videoUrl && !post.carouselItems) {
       throw new AppError(
-        'Post não possui "imageUrl", "videoUrl" nem "carouselItems" para publicar no Instagram',
+        'Post não possui "imageUrl", "videoUrl" nem "carouselItems" para publicar',
         400,
       );
     }
@@ -171,7 +228,16 @@ class PostsController {
         : post.videoUrl
           ? await InstagramService.publishReel(post.videoUrl, post.content)
           : await InstagramService.publishImagePost(post.imageUrl as string, post.content);
-      const updated = PostsService.update(post.id, { status: 'published', instagramMediaId });
+
+      const tiktok = await publishToTikTok(post);
+
+      const updated = PostsService.update(post.id, {
+        status: 'published',
+        instagramMediaId,
+        tiktokPublishId: tiktok.publishId,
+        tiktokStatus: tiktok.status,
+        tiktokError: tiktok.error,
+      });
       sendSuccess(res, updated);
     } catch (err) {
       PostsService.update(post.id, { status: 'failed' });

@@ -4,6 +4,11 @@ export type { CarouselItem };
 
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed';
 
+// Resultado da publicação no TikTok, sempre tentada junto do Instagram:
+// "skipped" cobre casos sem equivalente na Content Posting API (ex.: carrossel
+// misto de foto e vídeo), "failed" não derruba o post já publicado no Instagram.
+export type TikTokPublishOutcome = 'published' | 'skipped' | 'failed';
+
 export interface Post {
   id: string;
   content: string;
@@ -14,6 +19,9 @@ export interface Post {
   scheduledFor?: string;
   createdAt: string;
   instagramMediaId?: string;
+  tiktokPublishId?: string;
+  tiktokStatus?: TikTokPublishOutcome;
+  tiktokError?: string;
 }
 
 export interface CreatePostInput {
@@ -24,4 +32,6 @@ export interface CreatePostInput {
   scheduledFor?: string;
 }
 
-export type UpdatePostInput = Partial<Pick<Post, 'status' | 'instagramMediaId'>>;
+export type UpdatePostInput = Partial<
+  Pick<Post, 'status' | 'instagramMediaId' | 'tiktokPublishId' | 'tiktokStatus' | 'tiktokError'>
+>;

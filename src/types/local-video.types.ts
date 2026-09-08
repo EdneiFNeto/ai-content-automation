@@ -1,4 +1,4 @@
-export type LocalVideoSource = 'library' | 'generated';
+export type LocalVideoSource = 'library' | 'generated' | 'video';
 
 export interface LocalVideo {
   fileName: string;
