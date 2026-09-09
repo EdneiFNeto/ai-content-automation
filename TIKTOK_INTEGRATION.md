@@ -33,16 +33,16 @@ Arquivos relevantes:
 
 Campos obrigatórios pra sair do estado "Draft":
 
-| Campo | Observação |
-|---|---|
-| App icon | 1024×1024px, até 5MB |
-| App name | até 50 caracteres |
-| Category | dropdown (usamos "Lifestyle") |
-| Description | até 120 caracteres |
+| Campo                | Observação                                         |
+| -------------------- | -------------------------------------------------- |
+| App icon             | 1024×1024px, até 5MB                               |
+| App name             | até 50 caracteres                                  |
+| Category             | dropdown (usamos "Lifestyle")                      |
+| Description          | até 120 caracteres                                 |
 | Terms of Service URL | precisa ser uma página real acessível publicamente |
-| Privacy Policy URL | idem |
-| Platforms | marcar "Web" |
-| Web/Desktop URL | site oficial do app/serviço |
+| Privacy Policy URL   | idem                                               |
+| Platforms            | marcar "Web"                                       |
+| Web/Desktop URL      | site oficial do app/serviço                        |
 
 As URLs de Termos/Privacidade e o site oficial apontam pro próprio servidor deste projeto:
 `https://<seu-domínio>/legal/terms`, `/legal/privacy` e a raiz `/` — implementadas em `legal.controller.ts`.
@@ -109,7 +109,7 @@ Tentar publicar com um client_key não auditado — mesmo com `privacy_level: "S
 { "error": { "code": "unaudited_client_can_only_post_to_private_accounts" } }
 ```
 
-Isso não é sobre o nível de privacidade do *post*, é sobre a **conta TikTok em si**: ela precisa estar marcada como conta privada (TikTok app → Configurações e privacidade → Privacidade → "Conta Privada" → ativar). Enquanto o app não passa por auditoria, essa é uma exigência da plataforma, não uma escolha nossa — e vale tanto pro Sandbox quanto pro Production ainda não aprovado.
+Isso não é sobre o nível de privacidade do _post_, é sobre a **conta TikTok em si**: ela precisa estar marcada como conta privada (TikTok app → Configurações e privacidade → Privacidade → "Conta Privada" → ativar). Enquanto o app não passa por auditoria, essa é uma exigência da plataforma, não uma escolha nossa — e vale tanto pro Sandbox quanto pro Production ainda não aprovado.
 
 Depois que o Production for aprovado, a conta pode voltar a ser pública e os posts podem usar `privacy_level: "PUBLIC_TO_EVERYONE"`.
 
@@ -137,16 +137,24 @@ Ambos retornam um `publish_id`, que é consultado em `POST /v2/post/publish/stat
 
 Limites da API: vídeo até 4GB/10min; imagem até 20MB cada; a URL da mídia precisa ficar acessível por até 1h após o início do download.
 
+⚠️ **A mídia tem que estar num domínio verificado neste app do TikTok** (URL
+properties → URL prefix, seção 3). O TikTok recusa `PULL_FROM_URL` de qualquer
+outro host com `Please review our URL ownership verification rules`. Na prática:
+o `POST /publish` só serve TikTok quando a mídia entra por **upload multipart**
+(o serviço salva em `assets/generated/` e monta a URL no **próprio host** — o
+domínio ngrok/deploy que está verificado). Passar uma URL externa em `media[]`
+(ex.: Firebase Hosting) funciona pro Instagram/Facebook mas **quebra o TikTok**.
+
 ## 9. Integração com `/publish`
 
 Toda vez que um post é publicado no Instagram, o mesmo conteúdo é automaticamente publicado no TikTok em seguida (lógica em `publish.controller.ts`, função `publishToTikTok`):
 
-| Mídia (`items`) | Instagram | TikTok |
-|---|---|---|
-| 1 imagem | Post de imagem | Foto única |
-| 1 vídeo | Reels | Vídeo |
-| 2+ imagens | Carrossel | Carrossel de fotos |
-| carrossel com vídeo | Carrossel | **Pulado** (`tiktokStatus: "skipped"`) — a API do TikTok não tem equivalente |
+| Mídia (`items`)     | Instagram      | TikTok                                                                       |
+| ------------------- | -------------- | ---------------------------------------------------------------------------- |
+| 1 imagem            | Post de imagem | Foto única                                                                   |
+| 1 vídeo             | Reels          | Vídeo                                                                        |
+| 2+ imagens          | Carrossel      | Carrossel de fotos                                                           |
+| carrossel com vídeo | Carrossel      | **Pulado** (`tiktokStatus: "skipped"`) — a API do TikTok não tem equivalente |
 
 Se a publicação no TikTok falhar por qualquer motivo, o post **continua marcado como `published`** (porque o Instagram já deu certo) — o erro fica registrado em `tiktokError`, sem derrubar a resposta. Ou seja, TikTok é sempre "melhor esforço", nunca bloqueia o Instagram.
 
