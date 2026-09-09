@@ -18,8 +18,10 @@ O blueprint está em [`render.yaml`](render.yaml).
 - **Filesystem efêmero**: `assets/generated/` é gravável em runtime mas some a
   cada deploy/restart. OK pro fluxo de publish (upload → pull em minutos); não
   serve como storage durável.
-- **`NODE_ENV=production`** no build → `npm ci --include=dev` é obrigatório
-  (o `typescript` é devDependency). Já está no `buildCommand` do `render.yaml`.
+- **`NODE_ENV=production`** no build → `--include=dev` é obrigatório no
+  `npm install` (o `typescript` é devDependency). Já está no `buildCommand`.
+  Usamos `npm install` e não `npm ci` porque o lockfile carrega deps opcionais
+  WASM (`@emnapi/*`) que o `npm ci` recusa ao instalar em Linux.
 - **Não setar `PORT`** no dashboard — o Render injeta a dele; `src/index.ts` lê
   de `process.env.PORT`.
 - **Body de request**: multipart até 64 MB no código, mas o proxy do Render

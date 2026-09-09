@@ -10,9 +10,11 @@ services:
     plan: free
     region: oregon
     branch: main
-    # typescript está em devDependencies; --include=dev é obrigatório porque o
-    # Render roda o build com NODE_ENV=production (sem a flag, `tsc` some).
-    buildCommand: npm ci --include=dev && npm run build
+    # `npm install` (não `npm ci`): o lockfile tem deps opcionais WASM
+    # (@emnapi/*, cross-plataforma) que o `npm ci` recusa ao instalar em Linux.
+    # `--include=dev` é obrigatório: `typescript` é devDependency e o Render
+    # roda o build com NODE_ENV=production (sem a flag, `tsc` some).
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /
     autoDeploy: true
