@@ -183,7 +183,17 @@ TIKTOK_ACCESS_TOKEN=          # gerado via /auth/tiktok/login, copiado manualmen
 TIKTOK_PRIVACY_LEVEL=SELF_ONLY   # trocar pra PUBLIC_TO_EVERYONE só depois do app aprovado
 ```
 
-## 11. Checklist pra quando o Production for aprovado
+## 11. Status
+
+**Production submetido pra App Review em 2026-09-09.** Mudanças da submissão:
+app renomeado "AI GameCraft", ícone novo, Terms/Privacy/Website e Redirect URI
+migrados pro domínio Render (`https://ai-content-automation-2hei.onrender.com`),
+domínio verificado (URL prefix) em Sandbox e Production, texto dos scopes
+reescrito. **Ressalva:** o vídeo demo anexado ainda é o antigo (mostra o domínio
+ngrok) — se rejeitar por mismatch de domínio, gravar um novo contra o Render.
+Rejeição anterior era só "Invalid Website URL" (domínio ngrok efêmero).
+
+## 12. Checklist pra quando o Production for aprovado
 
 - [ ] Trocar `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` pelas credenciais de **Production** (não Sandbox)
 - [ ] Refazer o login OAuth pra gerar um `TIKTOK_ACCESS_TOKEN` novo com o client_key de Production
