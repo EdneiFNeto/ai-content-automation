@@ -1,7 +1,9 @@
 # Deploy — Render (free)
 
 O serviço roda no [Render](https://render.com) como **web service free**, com
-domínio fixo `https://<nome>.onrender.com`. Isso dá URLs estáveis pro callback
+domínio fixo `https://<nome>.onrender.com`. **Instância atual:**
+`https://ai-content-automation-2hei.onrender.com` (workspace BlackMind AI,
+`srv-dagaet0u01pc738ovpdg`). Isso dá URLs estáveis pro callback
 OAuth do TikTok, pras páginas de Termos/Privacidade e pro `PULL_FROM_URL` da
 mídia — o que o ngrok manual não sustentava (e é pré-requisito pra submeter o
 app TikTok pra Production).
