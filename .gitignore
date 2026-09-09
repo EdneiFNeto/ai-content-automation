@@ -5,6 +5,9 @@ coverage
 .DS_Store
 assets/generated
 *.txt
+# ...menos os arquivos de verificação de domínio do TikTok, que PRECISAM ir no
+# deploy (o TikTok busca em https://<host>/tiktokXXXX.txt).
+!public/*.txt
 
 # Vídeos são pesados — ficam locais (os que já estão versionados seguem, mas
 # nada novo entra). Para publicar por URL, use assets/generated ou storage externo.

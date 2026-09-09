@@ -1,0 +1,54 @@
+# Blueprint de deploy no Render (https://render.com) — plano free.
+# Render → New → Blueprint → conectar este repo → ele lê este arquivo.
+# Os valores marcados `sync: false` são preenchidos manualmente no dashboard
+# (aba Environment) — cole o conteúdo do .env local, MENOS a linha PORT
+# (o Render injeta a própria porta e o código já a lê de process.env.PORT).
+services:
+  - type: web
+    name: ai-content-automation
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    # typescript está em devDependencies; --include=dev é obrigatório porque o
+    # Render roda o build com NODE_ENV=production (sem a flag, `tsc` some).
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # defaults seguros (não são segredo)
+      - key: GRAPH_API_VERSION
+        value: v21.0
+      - key: TIKTOK_SCOPES
+        value: user.info.basic,video.publish
+      - key: TIKTOK_PRIVACY_LEVEL
+        value: SELF_ONLY
+      - key: GEMINI_IMAGE_MODEL
+        value: gemini-3.1-flash-image
+      - key: LEGAL_ENTITY_NAME
+        value: Content Publisher
+      # segredos / específicos do ambiente — preencher no dashboard
+      - key: INSTAGRAM_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+      # https://<este-serviço>.onrender.com/auth/tiktok/callback
+      - key: TIKTOK_REDIRECT_URI
+        sync: false
+      - key: TIKTOK_ACCESS_TOKEN
+        sync: false
+      - key: TIKTOK_REFRESH_TOKEN
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false
+      - key: FACEBOOK_PAGE_ACCESS_TOKEN
+        sync: false
